@@ -1,0 +1,17 @@
+# Open Source Software Attribution
+
+
+The k8s-pods-viewer project includes the following third-party software and licenses:
+
+
+{{ range . }}
+## {{ .Name }}
+
+* Name: {{ .Name }}
+* Version: {{ .Version }}
+* License: [{{ .LicenseName }}]({{ .LicenseURL }})
+
+```
+{{ .LicenseText }}
+```
+{{ end }}

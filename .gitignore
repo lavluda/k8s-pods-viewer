@@ -1,0 +1,9 @@
+.idea
+AGENTS.md
+/eks-node-viewer
+/eks-pods-view
+/k8s-pods-viewer
+coverage.out
+/dist
+/.static
+/.tmp

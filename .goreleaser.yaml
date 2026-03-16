@@ -1,0 +1,67 @@
+project_name: k8s-pods-viewer
+version: 2
+
+source:
+  enabled: false
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - binary: k8s-pods-viewer
+    main: ./cmd/k8s-pods-viewer
+    targets:
+      - linux_amd64
+      - linux_arm64
+      - windows_amd64
+      - darwin_amd64
+      - darwin_arm64
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -v
+
+universal_binaries:
+  - replace: true
+
+archives:
+  - id: k8s-pods-viewer
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - LICENSE
+      - NOTICE
+      - ATTRIBUTION.md
+      - README.md
+
+release:
+  github:
+    owner: lavluda
+    name: k8s-pods-viewer
+  prerelease: auto
+
+snapshot:
+  version_template: "{{ .Tag }}-next"
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_sha256_checksums.txt"
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
