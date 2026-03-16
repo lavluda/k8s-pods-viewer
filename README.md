@@ -44,6 +44,12 @@ If pod metrics are unavailable, the tool will still connect to the cluster, but 
 go install github.com/lavluda/k8s-pods-viewer/cmd/k8s-pods-viewer@latest
 ```
 
+### Homebrew
+
+```bash
+brew install lavluda/tap/k8s-pods-viewer
+```
+
 ### Build from source
 
 ```bash
@@ -186,6 +192,17 @@ Run the release flag matrix:
 ```bash
 make test-release
 ```
+
+## Homebrew Releases
+
+Tagged releases update the Homebrew tap formula in `lavluda/homebrew-tap`
+through GoReleaser.
+
+Maintainer setup:
+
+- create the `lavluda/homebrew-tap` repository with a `Formula/` directory
+- add a `TAP_GITHUB_TOKEN` repository secret in this repo
+- the token must have `contents: write` access to `lavluda/homebrew-tap`
 
 ## Acknowledgments
 

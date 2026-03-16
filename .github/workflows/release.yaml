@@ -62,6 +62,7 @@ jobs:
           workdir: .
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
 
       - name: Apply curated release notes
         if: startsWith(github.ref, 'refs/tags/')

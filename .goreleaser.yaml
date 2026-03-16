@@ -58,6 +58,25 @@ checksum:
   name_template: "{{ .ProjectName }}_{{ .Version }}_sha256_checksums.txt"
   algorithm: sha256
 
+brews:
+  - name: k8s-pods-viewer
+    repository:
+      owner: lavluda
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    commit_author:
+      name: github-actions[bot]
+      email: 41898282+github-actions[bot]@users.noreply.github.com
+    homepage: https://github.com/lavluda/k8s-pods-viewer
+    description: Terminal UI for watching live pod CPU and memory usage in Kubernetes
+    license: Apache-2.0
+    install: |
+      bin.install "k8s-pods-viewer"
+    test: |
+      system bin/"k8s-pods-viewer", "-version"
+
 changelog:
   sort: asc
   use: github
