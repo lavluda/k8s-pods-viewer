@@ -21,6 +21,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/bubbles/paginator"
@@ -45,16 +46,19 @@ var (
 )
 
 type PodsUIModel struct {
-	cpuBar     progress.Model
-	memBar     progress.Model
-	defaultBar progress.Model
-	cluster    *Cluster
-	paginator  paginator.Model
-	height     int
-	width      int
-	podSorter  func(lhs, rhs *Pod) bool
-	style      *Style
-	resources  []v1.ResourceName
+	cpuBar      progress.Model
+	memBar      progress.Model
+	defaultBar  progress.Model
+	cluster     *Cluster
+	paginator   paginator.Model
+	height      int
+	width       int
+	podSorter   func(lhs, rhs *Pod) bool
+	style       *Style
+	resources   []v1.ResourceName
+	statusMu    sync.RWMutex
+	statusLine  string
+	statusUntil time.Time
 }
 
 func NewPodsUIModel(podSort string, style *Style) *PodsUIModel {
@@ -107,6 +111,7 @@ func (u *PodsUIModel) View() string {
 		fmt.Fprintln(&b)
 		fmt.Fprintln(&b, "Waiting for update or no pods found...")
 		fmt.Fprintln(&b, u.paginator.View())
+		u.writeStatusLine(&b)
 		fmt.Fprintln(&b, podsHelpStyle("←/→ page • q: quit"))
 		return u.combineWithNodeUsagePanel(b.String(), stats.Nodes, pods)
 	}
@@ -127,8 +132,58 @@ func (u *PodsUIModel) View() string {
 	ctw.Flush()
 
 	fmt.Fprintln(&b, u.paginator.View())
+	u.writeStatusLine(&b)
 	fmt.Fprintln(&b, podsHelpStyle("←/→ page • q: quit"))
 	return u.combineWithNodeUsagePanel(b.String(), stats.Nodes, pods)
+}
+
+func (u *PodsUIModel) SetTransientStatus(status string, duration time.Duration) {
+	if strings.TrimSpace(status) == "" {
+		u.ClearTransientStatus()
+		return
+	}
+	if duration <= 0 {
+		duration = 5 * time.Second
+	}
+
+	u.statusMu.Lock()
+	u.statusLine = strings.TrimSpace(status)
+	u.statusUntil = time.Now().Add(duration)
+	u.statusMu.Unlock()
+}
+
+func (u *PodsUIModel) ClearTransientStatus() {
+	u.statusMu.Lock()
+	u.statusLine = ""
+	u.statusUntil = time.Time{}
+	u.statusMu.Unlock()
+}
+
+func (u *PodsUIModel) writeStatusLine(w io.Writer) {
+	if status := u.currentStatus(); status != "" {
+		fmt.Fprintln(w, u.style.yellow(status))
+	}
+}
+
+func (u *PodsUIModel) currentStatus() string {
+	u.statusMu.RLock()
+	status := u.statusLine
+	until := u.statusUntil
+	u.statusMu.RUnlock()
+
+	if status == "" {
+		return ""
+	}
+	if !until.IsZero() && time.Now().After(until) {
+		u.statusMu.Lock()
+		if u.statusLine == status && u.statusUntil.Equal(until) && time.Now().After(u.statusUntil) {
+			u.statusLine = ""
+			u.statusUntil = time.Time{}
+		}
+		u.statusMu.Unlock()
+		return ""
+	}
+	return status
 }
 
 func (u *PodsUIModel) writeClusterSummary(stats Stats, pods []*Pod, w io.Writer) {
@@ -172,25 +227,17 @@ func (u *PodsUIModel) writePodInfo(p *Pod, w io.Writer) {
 	for _, res := range u.resources {
 		usedRes := usage[res]
 		requestedRes := requested[res]
-		denominator := "-"
 		nodeName := p.NodeName()
 		if nodeName == "" {
 			nodeName = "Pending"
 		}
 
-		pct := 0.0
-		if limitRes, ok := limits[res]; ok {
-			denominator = formatResourceQuantity(res, limitRes)
-			if limitRes.AsApproximateFloat64() != 0 {
-				pct = usedRes.AsApproximateFloat64() / limitRes.AsApproximateFloat64()
-			}
-		}
-
+		usageSummary, pct := formatPodUsageSummary(res, usedRes, requestedRes, limits)
 		bar := u.progressForResource(res)
 		if firstLine {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s/%s\t%s\t%s", p.FullName(), res, bar.ViewAs(boundPct(pct)), formatResourceQuantity(res, requestedRes), denominator, p.Phase(), nodeName)
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s", p.FullName(), res, bar.ViewAs(boundPct(pct)), usageSummary, p.Phase(), nodeName)
 		} else {
-			fmt.Fprintf(w, " \t%s\t%s\t%s/%s\t\t", res, bar.ViewAs(boundPct(pct)), formatResourceQuantity(res, requestedRes), denominator)
+			fmt.Fprintf(w, " \t%s\t%s\t%s\t\t", res, bar.ViewAs(boundPct(pct)), usageSummary)
 		}
 		fmt.Fprintln(w)
 		firstLine = false
@@ -341,8 +388,79 @@ func formatResourceQuantity(resourceName v1.ResourceName, quantity resource.Quan
 	case v1.ResourceCPU:
 		return resource.NewMilliQuantity(quantity.MilliValue(), resource.DecimalSI).String()
 	default:
-		return quantity.String()
+		return formatBinaryQuantity(quantity)
 	}
+}
+
+func formatBinaryQuantity(quantity resource.Quantity) string {
+	value := quantity.Value()
+	if value == 0 {
+		return "0"
+	}
+
+	negative := value < 0
+	if negative {
+		value = -value
+	}
+
+	type binaryUnit struct {
+		suffix string
+		size   int64
+	}
+
+	units := []binaryUnit{
+		{suffix: "Ki", size: 1 << 10},
+		{suffix: "Mi", size: 1 << 20},
+		{suffix: "Gi", size: 1 << 30},
+		{suffix: "Ti", size: 1 << 40},
+		{suffix: "Pi", size: 1 << 50},
+		{suffix: "Ei", size: 1 << 60},
+	}
+
+	for i, unit := range units {
+		scaled := divCeil(value, unit.size)
+		if scaled < 10000 || i == len(units)-1 {
+			if negative {
+				scaled = -scaled
+			}
+			return fmt.Sprintf("%d%s", scaled, unit.suffix)
+		}
+	}
+
+	return quantity.String()
+}
+
+func divCeil(numerator int64, denominator int64) int64 {
+	if denominator == 0 {
+		return 0
+	}
+	return (numerator + denominator - 1) / denominator
+}
+
+func formatPodUsageSummary(resourceName v1.ResourceName, used resource.Quantity, requested resource.Quantity, limits v1.ResourceList) (string, float64) {
+	denominator := "-"
+	scale := resource.Quantity{}
+
+	if limit, ok := limits[resourceName]; ok {
+		denominator = formatResourceQuantity(resourceName, limit)
+		scale = limit
+	} else if requested.AsApproximateFloat64() != 0 {
+		// Without a limit, use the request as the visual baseline so pods with
+		// requests still show proportional activity.
+		denominator = formatResourceQuantity(resourceName, requested)
+		scale = requested
+	}
+
+	pct := 0.0
+	if scale.AsApproximateFloat64() != 0 {
+		pct = used.AsApproximateFloat64() / scale.AsApproximateFloat64()
+	}
+
+	return fmt.Sprintf("used %s req/lim %s/%s",
+		formatResourceQuantity(resourceName, used),
+		formatResourceQuantity(resourceName, requested),
+		denominator,
+	), pct
 }
 
 func quantityPct(used resource.Quantity, alloc resource.Quantity) float64 {

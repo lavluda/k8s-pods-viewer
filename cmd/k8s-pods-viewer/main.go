@@ -60,6 +60,10 @@ func main() {
 		log.Fatal(err)
 	}
 
+	m := model.NewPodsUIModel(flags.PodSort, runtime.style)
+	m.SetResources(runtime.resources)
+	configureClientLogging(m)
+
 	cs, err := client.NewKubernetes(flags.Kubeconfig, flags.Context)
 	if err != nil {
 		log.Fatalf("creating client, %s", err)
@@ -70,9 +74,6 @@ func main() {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	m := model.NewPodsUIModel(flags.PodSort, runtime.style)
-	m.SetResources(runtime.resources)
 
 	controller := client.NewPodsController(cs, metricsClient, m, runtime.nodeSelector, runtime.podSelector, flags.Namespace)
 	controller.Start(ctx)

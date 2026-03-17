@@ -16,7 +16,6 @@ package client
 
 import (
 	"context"
-	"log"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -152,11 +151,11 @@ func (m PodsController) startPodMetricsPoller(ctx context.Context, cluster *mode
 		for {
 			if err := m.refreshPodMetrics(ctx, cluster); err != nil {
 				if !warned {
-					log.Printf("pod metrics unavailable (install metrics-server and grant RBAC): %v", err)
+					m.uiModel.SetTransientStatus("Pod metrics unavailable; retrying without live usage data...", 10*time.Second)
 					warned = true
 				}
 			} else if warned {
-				log.Printf("pod metrics connected")
+				m.uiModel.SetTransientStatus("Pod metrics reconnected.", 5*time.Second)
 				warned = false
 			}
 
