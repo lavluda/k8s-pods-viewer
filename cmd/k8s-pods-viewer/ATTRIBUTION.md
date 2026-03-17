@@ -2984,8 +2984,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## golang.org/x/text
 
 * Name: golang.org/x/text
-* Version: v0.33.0
-* License: [BSD-3-Clause](https://cs.opensource.google/go/x/text/+/v0.33.0:LICENSE)
+* Version: v0.35.0
+* License: [BSD-3-Clause](https://cs.opensource.google/go/x/text/+/v0.35.0:LICENSE)
 
 ```
 Copyright 2009 The Go Authors.
