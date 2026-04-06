@@ -76,13 +76,13 @@ SOFTWARE.
 ## github.com/charmbracelet/bubbles
 
 * Name: github.com/charmbracelet/bubbles
-* Version: v0.21.0
-* License: [MIT](https://github.com/charmbracelet/bubbles/blob/v0.21.0/LICENSE)
+* Version: v1.0.0
+* License: [MIT](https://github.com/charmbracelet/bubbles/blob/v1.0.0/LICENSE)
 
 ```
 MIT License
 
-Copyright (c) 2020-2023 Charmbracelet, Inc
+Copyright (c) 2020-2025 Charmbracelet, Inc
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -138,8 +138,8 @@ SOFTWARE.
 ## github.com/charmbracelet/colorprofile
 
 * Name: github.com/charmbracelet/colorprofile
-* Version: v0.2.3-0.20250311203215-f60798e515dc
-* License: [MIT](https://github.com/charmbracelet/colorprofile/blob/f60798e515dc/LICENSE)
+* Version: v0.4.1
+* License: [MIT](https://github.com/charmbracelet/colorprofile/blob/v0.4.1/LICENSE)
 
 ```
 MIT License
@@ -231,8 +231,8 @@ SOFTWARE.
 ## github.com/charmbracelet/x/ansi
 
 * Name: github.com/charmbracelet/x/ansi
-* Version: v0.10.1
-* License: [MIT](https://github.com/charmbracelet/x/blob/ansi/v0.10.1/ansi/LICENSE)
+* Version: v0.11.6
+* License: [MIT](https://github.com/charmbracelet/x/blob/ansi/v0.11.6/ansi/LICENSE)
 
 ```
 MIT License
@@ -262,8 +262,8 @@ SOFTWARE.
 ## github.com/charmbracelet/x/cellbuf
 
 * Name: github.com/charmbracelet/x/cellbuf
-* Version: v0.0.13-0.20250311204145-2c3ea96c31dd
-* License: [MIT](https://github.com/charmbracelet/x/blob/2c3ea96c31dd/cellbuf/LICENSE)
+* Version: v0.0.15
+* License: [MIT](https://github.com/charmbracelet/x/blob/cellbuf/v0.0.15/cellbuf/LICENSE)
 
 ```
 MIT License
@@ -293,13 +293,106 @@ SOFTWARE.
 ## github.com/charmbracelet/x/term
 
 * Name: github.com/charmbracelet/x/term
-* Version: v0.2.1
-* License: [MIT](https://github.com/charmbracelet/x/blob/term/v0.2.1/term/LICENSE)
+* Version: v0.2.2
+* License: [MIT](https://github.com/charmbracelet/x/blob/term/v0.2.2/term/LICENSE)
 
 ```
 MIT License
 
 Copyright (c) 2023 Charmbracelet, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+## github.com/clipperhouse/displaywidth
+
+* Name: github.com/clipperhouse/displaywidth
+* Version: v0.9.0
+* License: [MIT](https://github.com/clipperhouse/displaywidth/blob/v0.9.0/LICENSE)
+
+```
+MIT License
+
+Copyright (c) 2025 Matt Sherman
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+## github.com/clipperhouse/stringish
+
+* Name: github.com/clipperhouse/stringish
+* Version: v0.1.1
+* License: [MIT](https://github.com/clipperhouse/stringish/blob/v0.1.1/LICENSE)
+
+```
+MIT License
+
+Copyright (c) 2025 Matt Sherman
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+## github.com/clipperhouse/uax29/v2/graphemes
+
+* Name: github.com/clipperhouse/uax29/v2/graphemes
+* Version: v2.5.0
+* License: [MIT](https://github.com/clipperhouse/uax29/blob/v2.5.0/LICENSE)
+
+```
+MIT License
+
+Copyright (c) 2020 Matt Sherman
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -1793,8 +1886,8 @@ SOFTWARE.
 ## github.com/lucasb-eyer/go-colorful
 
 * Name: github.com/lucasb-eyer/go-colorful
-* Version: v1.2.0
-* License: [MIT](https://github.com/lucasb-eyer/go-colorful/blob/v1.2.0/LICENSE)
+* Version: v1.3.0
+* License: [MIT](https://github.com/lucasb-eyer/go-colorful/blob/v1.3.0/LICENSE)
 
 ```
 Copyright (c) 2013 Lucas Beyer
@@ -1846,8 +1939,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ## github.com/mattn/go-runewidth
 
 * Name: github.com/mattn/go-runewidth
-* Version: v0.0.16
-* License: [MIT](https://github.com/mattn/go-runewidth/blob/v0.0.16/LICENSE)
+* Version: v0.0.19
+* License: [MIT](https://github.com/mattn/go-runewidth/blob/v0.0.19/LICENSE)
 
 ```
 The MIT License (MIT)
@@ -3265,8 +3358,8 @@ limitations under the License.
 ## k8s.io/api
 
 * Name: k8s.io/api
-* Version: v0.35.0
-* License: [Apache-2.0](https://github.com/kubernetes/api/blob/v0.35.0/LICENSE)
+* Version: v0.35.3
+* License: [Apache-2.0](https://github.com/kubernetes/api/blob/v0.35.3/LICENSE)
 
 ```
 
@@ -3477,8 +3570,8 @@ limitations under the License.
 ## k8s.io/apimachinery/pkg
 
 * Name: k8s.io/apimachinery/pkg
-* Version: v0.35.0
-* License: [Apache-2.0](https://github.com/kubernetes/apimachinery/blob/v0.35.0/LICENSE)
+* Version: v0.35.3
+* License: [Apache-2.0](https://github.com/kubernetes/apimachinery/blob/v0.35.3/LICENSE)
 
 ```
 
@@ -3689,8 +3782,8 @@ limitations under the License.
 ## k8s.io/apimachinery/third_party/forked/golang
 
 * Name: k8s.io/apimachinery/third_party/forked/golang
-* Version: v0.35.0
-* License: [BSD-3-Clause](https://github.com/kubernetes/apimachinery/blob/v0.35.0/third_party/forked/golang/LICENSE)
+* Version: v0.35.3
+* License: [BSD-3-Clause](https://github.com/kubernetes/apimachinery/blob/v0.35.3/third_party/forked/golang/LICENSE)
 
 ```
 Copyright (c) 2009 The Go Authors. All rights reserved.
@@ -3726,8 +3819,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## k8s.io/client-go
 
 * Name: k8s.io/client-go
-* Version: v0.35.0
-* License: [Apache-2.0](https://github.com/kubernetes/client-go/blob/v0.35.0/LICENSE)
+* Version: v0.35.3
+* License: [Apache-2.0](https://github.com/kubernetes/client-go/blob/v0.35.3/LICENSE)
 
 ```
 
@@ -3938,8 +4031,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## k8s.io/klog/v2
 
 * Name: k8s.io/klog/v2
-* Version: v2.130.1
-* License: [Apache-2.0](https://github.com/kubernetes/klog/blob/v2.130.1/LICENSE)
+* Version: v2.140.0
+* License: [Apache-2.0](https://github.com/kubernetes/klog/blob/v2.140.0/LICENSE)
 
 ```
 Apache License
@@ -4600,8 +4693,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## k8s.io/metrics/pkg
 
 * Name: k8s.io/metrics/pkg
-* Version: v0.35.0
-* License: [Apache-2.0](https://github.com/kubernetes/metrics/blob/v0.35.0/LICENSE)
+* Version: v0.35.3
+* License: [Apache-2.0](https://github.com/kubernetes/metrics/blob/v0.35.3/LICENSE)
 
 ```
                                  Apache License
