@@ -9,7 +9,10 @@ It is designed for the common question behind noisy clusters: which pods are act
 ## What It Shows
 
 - A live pod list with separate `cpu` and `memory` bars
-- Pod rows sorted by live usage
+- Namespace-grouped pod rows with semantic status indicators
+- Keyboard sorting for `cpu`, `memory`, and `status`
+- Live `/` filtering across pod, namespace, workload, and node names
+- Compact node aliases with a detailed info toggle
 - A right-side node panel with per-node CPU and memory usage
 - Cluster-level CPU and memory summary at the top
 - Filters for namespace, pod labels, and node labels
@@ -20,7 +23,7 @@ By default the screen refreshes every `1s`.
 
 The UI intentionally shows two different kinds of numbers:
 
-- Pod bars: `live usage / pod limit`
+- Pod bars: `% of live usage / pod limit` with the percentage shown inside the bar
 - Pod value text: `requested / limit`
 - Node panel percentage: `live node usage / node allocatable`
 - Node panel `asg/lim`: `sum of pod requests on the node / node allocatable`
@@ -165,6 +168,12 @@ CLI flags override config file values.
 ## Controls
 
 - `←/→`: change page
+- `c`: sort by CPU
+- `m`: sort by memory
+- `s`: sort by status
+- `g`: cycle grouping (`namespace`, `workload`, `flat`)
+- `i`: toggle compact vs detailed mode
+- `/`: filter pods
 - `q`: quit
 
 ## Development

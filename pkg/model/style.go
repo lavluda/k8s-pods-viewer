@@ -23,10 +23,13 @@ import (
 )
 
 type Style struct {
-	green    func(strs ...string) string
-	yellow   func(strs ...string) string
-	red      func(strs ...string) string
-	gradient progress.Option
+	green     func(strs ...string) string
+	yellow    func(strs ...string) string
+	red       func(strs ...string) string
+	greenHex  string
+	yellowHex string
+	redHex    string
+	gradient  progress.Option
 }
 
 func ParseStyle(style string) (*Style, error) {
@@ -35,10 +38,24 @@ func ParseStyle(style string) (*Style, error) {
 		return nil, fmt.Errorf("three colors must be provided for the style, found %d (%q)", len(colors), style)
 	}
 	s := &Style{}
+	s.greenHex = colors[0]
+	s.yellowHex = colors[1]
+	s.redHex = colors[2]
 	s.green = lipgloss.NewStyle().Foreground(lipgloss.Color(colors[0])).Render
 	s.yellow = lipgloss.NewStyle().Foreground(lipgloss.Color(colors[1])).Render
 	s.red = lipgloss.NewStyle().Foreground(lipgloss.Color(colors[2])).Render
 
 	s.gradient = progress.WithGradient(colors[2], colors[0])
 	return s, nil
+}
+
+func (s *Style) SeverityColor(severity PodHealthSeverity) lipgloss.Color {
+	switch severity {
+	case PodHealthCritical:
+		return lipgloss.Color(s.redHex)
+	case PodHealthWarning:
+		return lipgloss.Color(s.yellowHex)
+	default:
+		return lipgloss.Color(s.greenHex)
+	}
 }

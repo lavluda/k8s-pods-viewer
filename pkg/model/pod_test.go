@@ -114,3 +114,51 @@ func TestPodUpdate(t *testing.T) {
 		t.Errorf("expected NodeName == %s, got %s", exp, got)
 	}
 }
+
+func TestPodWorkloadUsesDeploymentForReplicaSetOwner(t *testing.T) {
+	pod := testPod("default", "mypod")
+	controller := true
+	pod.OwnerReferences = []metav1.OwnerReference{{
+		APIVersion: "apps/v1",
+		Kind:       "ReplicaSet",
+		Name:       "reporting-worker-7f9c4d7bb8",
+		Controller: &controller,
+	}}
+
+	kind, name := model.NewPod(pod).Workload()
+	if got, want := kind, "Deployment"; got != want {
+		t.Fatalf("kind = %q, want %q", got, want)
+	}
+	if got, want := name, "reporting-worker"; got != want {
+		t.Fatalf("name = %q, want %q", got, want)
+	}
+}
+
+func TestPodHealthDetectsCrashLoop(t *testing.T) {
+	pod := testPod("default", "mypod")
+	pod.Status.Phase = v1.PodRunning
+	pod.Status.ContainerStatuses = []v1.ContainerStatus{{
+		Name: "container",
+		State: v1.ContainerState{
+			Waiting: &v1.ContainerStateWaiting{Reason: "CrashLoopBackOff"},
+		},
+	}}
+
+	health := model.NewPod(pod).Health()
+	if got, want := health.Label, "CrashLoop"; got != want {
+		t.Fatalf("label = %q, want %q", got, want)
+	}
+	if got, want := health.Severity, model.PodHealthCritical; got != want {
+		t.Fatalf("severity = %v, want %v", got, want)
+	}
+}
+
+func TestPodRestartsSumsInitAndAppContainers(t *testing.T) {
+	pod := testPod("default", "mypod")
+	pod.Status.InitContainerStatuses = []v1.ContainerStatus{{RestartCount: 2}}
+	pod.Status.ContainerStatuses = []v1.ContainerStatus{{RestartCount: 3}, {RestartCount: 1}}
+
+	if got, want := model.NewPod(pod).Restarts(), 6; got != want {
+		t.Fatalf("Restarts() = %d, want %d", got, want)
+	}
+}

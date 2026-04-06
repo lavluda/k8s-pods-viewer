@@ -44,9 +44,31 @@ func NewMetrics(kubeconfig, context string) (*metricsclientset.Clientset, error)
 	return metricsclientset.NewForConfig(config)
 }
 
+func ResolveContextName(kubeconfig, context string) string {
+	config, err := clientConfig(kubeconfig, context).RawConfig()
+	if err != nil {
+		if strings.TrimSpace(context) != "" {
+			return context
+		}
+		return "current"
+	}
+	if strings.TrimSpace(config.CurrentContext) != "" {
+		return config.CurrentContext
+	}
+	if strings.TrimSpace(context) != "" {
+		return context
+	}
+	return "current"
+}
+
 func getConfig(kubeconfig, context string) (*rest.Config, error) {
 	// use the current context in kubeconfig
+	return clientConfig(kubeconfig, context).ClientConfig()
+}
+
+func clientConfig(kubeconfig, context string) clientcmd.ClientConfig {
 	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		&clientcmd.ClientConfigLoadingRules{Precedence: strings.Split(kubeconfig, ":")},
-		&clientcmd.ConfigOverrides{CurrentContext: context}).ClientConfig()
+		&clientcmd.ConfigOverrides{CurrentContext: context},
+	)
 }

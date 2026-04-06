@@ -16,12 +16,28 @@ package model
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+type PodHealthSeverity int
+
+const (
+	PodHealthHealthy PodHealthSeverity = iota
+	PodHealthWarning
+	PodHealthCritical
+)
+
+type PodHealth struct {
+	Icon     string
+	Label    string
+	Severity PodHealthSeverity
+}
 
 // Pod is our pod model used for internal storage and display
 type Pod struct {
@@ -85,6 +101,98 @@ func (p *Pod) Phase() v1.PodPhase {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.pod.Status.Phase
+}
+
+func (p *Pod) Restarts() int {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	restarts := 0
+	for _, status := range p.pod.Status.InitContainerStatuses {
+		restarts += int(status.RestartCount)
+	}
+	for _, status := range p.pod.Status.ContainerStatuses {
+		restarts += int(status.RestartCount)
+	}
+	return restarts
+}
+
+func (p *Pod) Workload() (kind, name string) {
+	p.mu.RLock()
+	ownerRefs := append([]metav1.OwnerReference(nil), p.pod.OwnerReferences...)
+	labels := map[string]string{}
+	for k, v := range p.pod.Labels {
+		labels[k] = v
+	}
+	name = p.pod.Name
+	p.mu.RUnlock()
+
+	if owner := controllerOwnerRef(ownerRefs); owner != nil {
+		kind = owner.Kind
+		name = owner.Name
+		if owner.Kind == "ReplicaSet" {
+			if deploymentName, ok := deploymentNameFromReplicaSet(owner.Name); ok {
+				return "Deployment", deploymentName
+			}
+		}
+		return kind, name
+	}
+
+	if appName := firstNonEmpty(labels["app.kubernetes.io/name"], labels["app"]); appName != "" {
+		return "App", appName
+	}
+	return "Pod", name
+}
+
+func (p *Pod) Health() PodHealth {
+	p.mu.RLock()
+	phase := p.pod.Status.Phase
+	initStatuses := append([]v1.ContainerStatus(nil), p.pod.Status.InitContainerStatuses...)
+	containerStatuses := append([]v1.ContainerStatus(nil), p.pod.Status.ContainerStatuses...)
+	p.mu.RUnlock()
+
+	for _, status := range append(initStatuses, containerStatuses...) {
+		if waiting := status.State.Waiting; waiting != nil {
+			label := shortStatusReason(waiting.Reason)
+			if isCriticalReason(waiting.Reason) {
+				return PodHealth{Icon: "✕", Label: label, Severity: PodHealthCritical}
+			}
+			return PodHealth{Icon: "◐", Label: label, Severity: PodHealthWarning}
+		}
+		if terminated := status.State.Terminated; terminated != nil {
+			label := shortStatusReason(terminated.Reason)
+			if terminated.ExitCode != 0 || isCriticalReason(terminated.Reason) {
+				return PodHealth{Icon: "✕", Label: label, Severity: PodHealthCritical}
+			}
+			return PodHealth{Icon: "◐", Label: label, Severity: PodHealthWarning}
+		}
+		if terminated := status.LastTerminationState.Terminated; terminated != nil && status.RestartCount > 0 {
+			label := shortStatusReason(terminated.Reason)
+			if label == "" {
+				label = "Restarting"
+			}
+			if terminated.Reason == "OOMKilled" {
+				return PodHealth{Icon: "✕", Label: "OOMKilled", Severity: PodHealthCritical}
+			}
+			return PodHealth{Icon: "↻", Label: label, Severity: PodHealthWarning}
+		}
+	}
+
+	switch phase {
+	case v1.PodRunning:
+		if p.Restarts() > 0 {
+			return PodHealth{Icon: "↻", Label: "Restarting", Severity: PodHealthWarning}
+		}
+		return PodHealth{Icon: "●", Label: "Running", Severity: PodHealthHealthy}
+	case v1.PodPending:
+		return PodHealth{Icon: "◐", Label: "Pending", Severity: PodHealthWarning}
+	case v1.PodSucceeded:
+		return PodHealth{Icon: "●", Label: "Succeeded", Severity: PodHealthHealthy}
+	case v1.PodFailed:
+		return PodHealth{Icon: "✕", Label: "Failed", Severity: PodHealthCritical}
+	default:
+		return PodHealth{Icon: "◐", Label: "Unknown", Severity: PodHealthWarning}
+	}
 }
 
 // Created returns the pod creation time.
@@ -169,4 +277,76 @@ func (p *Pod) Usage() v1.ResourceList {
 		usage[rn] = q.DeepCopy()
 	}
 	return usage
+}
+
+func controllerOwnerRef(ownerRefs []metav1.OwnerReference) *metav1.OwnerReference {
+	for _, owner := range ownerRefs {
+		if owner.Controller != nil && *owner.Controller {
+			ownerCopy := owner
+			return &ownerCopy
+		}
+	}
+	if len(ownerRefs) == 0 {
+		return nil
+	}
+	owner := ownerRefs[0]
+	return &owner
+}
+
+func deploymentNameFromReplicaSet(name string) (string, bool) {
+	idx := strings.LastIndexByte(name, '-')
+	if idx <= 0 || idx == len(name)-1 {
+		return "", false
+	}
+
+	suffix := name[idx+1:]
+	if len(suffix) < 6 || len(suffix) > 10 {
+		return "", false
+	}
+	for _, ch := range suffix {
+		if (ch < 'a' || ch > 'z') && (ch < '0' || ch > '9') {
+			return "", false
+		}
+	}
+	return name[:idx], true
+}
+
+func isCriticalReason(reason string) bool {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return false
+	}
+	if strings.Contains(reason, "BackOff") || strings.Contains(reason, "Error") {
+		return true
+	}
+	switch reason {
+	case "CrashLoopBackOff", "ImagePullBackOff", "ErrImagePull", "CreateContainerConfigError", "OOMKilled", "RunContainerError":
+		return true
+	default:
+		return false
+	}
+}
+
+func shortStatusReason(reason string) string {
+	switch reason {
+	case "":
+		return ""
+	case "CrashLoopBackOff":
+		return "CrashLoop"
+	case "ImagePullBackOff", "ErrImagePull":
+		return "ImagePull"
+	case "CreateContainerConfigError":
+		return "ConfigError"
+	default:
+		return reason
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }

@@ -21,6 +21,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestFormatResourceQuantity(t *testing.T) {
@@ -123,5 +124,124 @@ func TestFormatPodUsageSummaryKeepsBestEffortVisible(t *testing.T) {
 	}
 	if got, want := pct, 0.0; got != want {
 		t.Fatalf("pct = %v, want %v", got, want)
+	}
+}
+
+func TestPodsUIModelViewShowsNamespaceGroupingAndNodeAliases(t *testing.T) {
+	style, err := ParseStyle("#04B575,#FFFF00,#FF0000")
+	if err != nil {
+		t.Fatalf("ParseStyle() error = %v", err)
+	}
+
+	uiModel := NewPodsUIModel("cpu=dsc", style)
+	uiModel.SetContextName("prod-cluster")
+	uiModel.SetNamespace("all")
+	uiModel.width = 120
+
+	node := NewNode(&v1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "ip-172-24-5-93"},
+		Status: v1.NodeStatus{
+			Allocatable: v1.ResourceList{
+				v1.ResourceCPU:    resource.MustParse("2"),
+				v1.ResourceMemory: resource.MustParse("2Gi"),
+			},
+		},
+	})
+	node.Show()
+	uiModel.Cluster().AddNode(node)
+
+	pod := NewPod(&v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "reporting",
+			Name:      "worker-0",
+		},
+		Spec: v1.PodSpec{
+			NodeName: "ip-172-24-5-93",
+			Containers: []v1.Container{{
+				Resources: v1.ResourceRequirements{
+					Requests: v1.ResourceList{
+						v1.ResourceCPU:    resource.MustParse("500m"),
+						v1.ResourceMemory: resource.MustParse("512Mi"),
+					},
+					Limits: v1.ResourceList{
+						v1.ResourceCPU:    resource.MustParse("1"),
+						v1.ResourceMemory: resource.MustParse("1Gi"),
+					},
+				},
+			}},
+		},
+		Status: v1.PodStatus{Phase: v1.PodRunning},
+	})
+	pod.SetUsage(v1.ResourceList{
+		v1.ResourceCPU:    resource.MustParse("700m"),
+		v1.ResourceMemory: resource.MustParse("768Mi"),
+	})
+	uiModel.Cluster().AddPod(pod)
+
+	got := uiModel.View()
+	if !strings.Contains(got, "Ctx: prod-cluster") {
+		t.Fatalf("View() missing context bar, got %q", got)
+	}
+	if !strings.Contains(got, "reporting") {
+		t.Fatalf("View() missing namespace group header, got %q", got)
+	}
+	if !strings.Contains(got, "worker-0") {
+		t.Fatalf("View() missing pod name, got %q", got)
+	}
+	if !strings.Contains(got, "node-1") {
+		t.Fatalf("View() missing compact node alias, got %q", got)
+	}
+}
+
+func TestPodsUIModelViewAppliesFilterQuery(t *testing.T) {
+	style, err := ParseStyle("#04B575,#FFFF00,#FF0000")
+	if err != nil {
+		t.Fatalf("ParseStyle() error = %v", err)
+	}
+
+	uiModel := NewPodsUIModel("cpu=dsc", style)
+	uiModel.filterQuery = "api"
+
+	node := NewNode(&v1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "node-a"},
+		Status: v1.NodeStatus{
+			Allocatable: v1.ResourceList{v1.ResourceCPU: resource.MustParse("2")},
+		},
+	})
+	node.Show()
+	uiModel.Cluster().AddNode(node)
+
+	newTestPod := func(name string) *Pod {
+		pod := NewPod(&v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "default",
+				Name:      name,
+			},
+			Spec: v1.PodSpec{
+				NodeName: "node-a",
+				Containers: []v1.Container{{
+					Resources: v1.ResourceRequirements{
+						Requests: v1.ResourceList{v1.ResourceCPU: resource.MustParse("250m")},
+					},
+				}},
+			},
+			Status: v1.PodStatus{Phase: v1.PodRunning},
+		})
+		pod.SetUsage(v1.ResourceList{v1.ResourceCPU: resource.MustParse("100m")})
+		return pod
+	}
+
+	uiModel.Cluster().AddPod(newTestPod("api-0"))
+	uiModel.Cluster().AddPod(newTestPod("worker-0"))
+
+	got := uiModel.View()
+	if !strings.Contains(got, "api-0") {
+		t.Fatalf("View() missing filtered pod, got %q", got)
+	}
+	if strings.Contains(got, "worker-0") {
+		t.Fatalf("View() unexpectedly contained filtered-out pod, got %q", got)
+	}
+	if !strings.Contains(got, "Shown: 1") {
+		t.Fatalf("View() missing filtered count, got %q", got)
 	}
 }

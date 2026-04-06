@@ -62,6 +62,8 @@ func main() {
 
 	m := model.NewPodsUIModel(flags.PodSort, runtime.style)
 	m.SetResources(runtime.resources)
+	m.SetContextName(client.ResolveContextName(flags.Kubeconfig, flags.Context))
+	m.SetNamespace(flags.Namespace)
 	configureClientLogging(m)
 
 	cs, err := client.NewKubernetes(flags.Kubeconfig, flags.Context)
