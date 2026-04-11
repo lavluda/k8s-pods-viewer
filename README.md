@@ -6,6 +6,14 @@ It is designed for the common question behind noisy clusters: which pods are act
 
 > Inspired by [awslabs/eks-node-viewer](https://github.com/awslabs/eks-node-viewer).
 
+## Quick Install
+
+> Recommended install:
+
+```bash
+brew install lavluda/tap/k8s-pods-viewer
+```
+
 ## Preview
 
 ![k8s-pods-viewer dashboard](docs/assets/k8s-pods-viewer-v1.2.0.png)
@@ -50,16 +58,16 @@ If pod metrics are unavailable, the tool will still connect to the cluster, but 
 
 ## Install
 
-### Go install
-
-```bash
-go install github.com/lavluda/k8s-pods-viewer/cmd/k8s-pods-viewer@latest
-```
-
 ### Homebrew
 
 ```bash
 brew install lavluda/tap/k8s-pods-viewer
+```
+
+### Go install
+
+```bash
+go install github.com/lavluda/k8s-pods-viewer/cmd/k8s-pods-viewer@latest
 ```
 
 ### Build from source
