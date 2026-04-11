@@ -147,9 +147,11 @@ func (p *Pod) Workload() (kind, name string) {
 func (p *Pod) Health() PodHealth {
 	p.mu.RLock()
 	phase := p.pod.Status.Phase
+	conditions := append([]v1.PodCondition(nil), p.pod.Status.Conditions...)
 	initStatuses := append([]v1.ContainerStatus(nil), p.pod.Status.InitContainerStatuses...)
 	containerStatuses := append([]v1.ContainerStatus(nil), p.pod.Status.ContainerStatuses...)
 	p.mu.RUnlock()
+	ready, readyKnown := podReadyCondition(conditions)
 
 	for _, status := range append(initStatuses, containerStatuses...) {
 		if waiting := status.State.Waiting; waiting != nil {
@@ -167,6 +169,9 @@ func (p *Pod) Health() PodHealth {
 			return PodHealth{Icon: "◐", Label: label, Severity: PodHealthWarning}
 		}
 		if terminated := status.LastTerminationState.Terminated; terminated != nil && status.RestartCount > 0 {
+			if phase == v1.PodRunning && (!readyKnown || ready) {
+				continue
+			}
 			label := shortStatusReason(terminated.Reason)
 			if label == "" {
 				label = "Restarting"
@@ -180,8 +185,8 @@ func (p *Pod) Health() PodHealth {
 
 	switch phase {
 	case v1.PodRunning:
-		if p.Restarts() > 0 {
-			return PodHealth{Icon: "↻", Label: "Restarting", Severity: PodHealthWarning}
+		if readyKnown && !ready {
+			return PodHealth{Icon: "◐", Label: "NotReady", Severity: PodHealthWarning}
 		}
 		return PodHealth{Icon: "●", Label: "Running", Severity: PodHealthHealthy}
 	case v1.PodPending:
@@ -193,6 +198,15 @@ func (p *Pod) Health() PodHealth {
 	default:
 		return PodHealth{Icon: "◐", Label: "Unknown", Severity: PodHealthWarning}
 	}
+}
+
+func podReadyCondition(conditions []v1.PodCondition) (bool, bool) {
+	for _, condition := range conditions {
+		if condition.Type == v1.PodReady {
+			return condition.Status == v1.ConditionTrue, true
+		}
+	}
+	return false, false
 }
 
 // Created returns the pod creation time.

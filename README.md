@@ -6,18 +6,27 @@ It is designed for the common question behind noisy clusters: which pods are act
 
 > Inspired by [awslabs/eks-node-viewer](https://github.com/awslabs/eks-node-viewer).
 
+## Preview
+
+![k8s-pods-viewer dashboard](docs/assets/k8s-pods-viewer-v1.2.0.png)
+
 ## What It Shows
 
 - A live pod list with separate `cpu` and `memory` bars
-- Namespace-grouped pod rows with semantic status indicators
+- Namespace, workload, or flat grouping for pod rows
+- Semantic pod status indicators that prefer current readiness over stale restart history
 - Keyboard sorting for `cpu`, `memory`, and `status`
 - Live `/` filtering across pod, namespace, workload, and node names
 - Compact node aliases with a detailed info toggle
 - A right-side node panel with per-node CPU and memory usage
+- A top dashboard header with context, cluster summary, and keyboard shortcuts
+- A right-side highlights rail for hot pods, restart visibility, and cluster watch status
 - Cluster-level CPU and memory summary at the top
 - Filters for namespace, pod labels, and node labels
 
 By default the screen refreshes every `1s`.
+
+The viewer runs in the normal terminal screen by default for better compatibility with terminals that clip the first rows in alt-screen mode. If you prefer the alternate screen buffer, use `--alt-screen`.
 
 ## Bar Semantics
 
@@ -136,6 +145,7 @@ pod-selector=app=api
 pod-sort=cpu=dsc
 resources=cpu,memory
 style=#04B575,#FFFF00,#FF0000
+alt-screen=false
 ```
 
 CLI flags override config file values.
@@ -161,6 +171,8 @@ CLI flags override config file values.
     List of comma separated resources to monitor (default: cpu,memory)
 -style string
     Three colors for styling 'good', 'ok' and 'bad' values
+-alt-screen
+    Run in the terminal alternate screen buffer
 -v, -version
     Display k8s-pods-viewer version
 ```

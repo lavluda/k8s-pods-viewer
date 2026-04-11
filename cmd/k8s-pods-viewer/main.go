@@ -80,7 +80,12 @@ func main() {
 	controller := client.NewPodsController(cs, metricsClient, m, runtime.nodeSelector, runtime.podSelector, flags.Namespace)
 	controller.Start(ctx)
 
-	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
+	programOptions := []tea.ProgramOption{}
+	if flags.AltScreen {
+		programOptions = append(programOptions, tea.WithAltScreen())
+	}
+
+	if _, err := tea.NewProgram(m, programOptions...).Run(); err != nil {
 		log.Fatalf("error running tea: %s", err)
 	}
 }

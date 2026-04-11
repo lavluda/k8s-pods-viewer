@@ -27,6 +27,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/facette/natsort"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -35,14 +36,15 @@ import (
 var (
 	podsHelpStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("#71717A")).Render
 	podsMutedStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("#A1A1AA")).Render
-	podsGroupStyle      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#E4E4E7")).Render
 	podsAliasStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("#94A3B8")).Render
-	podsHeaderStyle     = lipgloss.NewStyle().Bold(true).Render
-	podsBarEmptyStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#3F3F46")).Render
-	podsBarMarkerStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#71717A")).Render
+	podsBarShellStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#52525B")).Render
 	podsCPUStyle        = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#F97316")).Render
 	podsMemoryStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#38BDF8")).Render
 	podsDefaultResStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#22C55E")).Render
+	podsSurfaceBg       = lipgloss.Color("#151821")
+	podsSurfaceAltBg    = lipgloss.Color("#10131B")
+	podsSurfaceText     = lipgloss.Color("#E4E4E7")
+	podsSurfaceMuted    = lipgloss.Color("#94A3B8")
 	// white / black
 	podsActiveDot = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "235", Dark: "252"}).Render("•")
 	// black / white
@@ -76,6 +78,9 @@ type podUsageSnapshot struct {
 type nodeUsageRow struct {
 	name        string
 	alias       string
+	ready       bool
+	cordoned    bool
+	pods        int
 	cpuPct      float64
 	memPct      float64
 	cpuUsed     resource.Quantity
@@ -144,7 +149,7 @@ func (u *PodsUIModel) SetNamespace(namespace string) {
 }
 
 func (u *PodsUIModel) Init() tea.Cmd {
-	return nil
+	return tea.Batch(tea.ClearScreen, podsTickCmd())
 }
 
 func (u *PodsUIModel) View() string {
@@ -158,9 +163,11 @@ func (u *PodsUIModel) View() string {
 	nodeAliases := buildNodeAliases(stats.Nodes, visiblePods)
 
 	var b strings.Builder
-	u.writeContextBar(&b, visiblePods, filteredPods)
-	u.writeClusterSummary(&b, stats, visiblePods)
-	fmt.Fprintln(&b)
+	header := u.renderHeader(stats, visiblePods, filteredPods)
+	if header != "" {
+		b.WriteString(header)
+		b.WriteByte('\n')
+	}
 
 	if len(filteredPods) == 0 {
 		if strings.TrimSpace(u.filterQuery) != "" {
@@ -182,7 +189,7 @@ func (u *PodsUIModel) View() string {
 
 	fmt.Fprintln(&b, u.paginator.View())
 	u.writeFooter(&b)
-	return u.combineWithNodeUsagePanel(b.String(), stats.Nodes, visiblePods, nodeAliases)
+	return strings.TrimRight(u.combineWithNodeUsagePanel(b.String(), stats.Nodes, visiblePods, filteredPods, nodeAliases), "\n")
 }
 
 func (u *PodsUIModel) SetTransientStatus(status string, duration time.Duration) {
@@ -209,7 +216,7 @@ func (u *PodsUIModel) ClearTransientStatus() {
 
 func (u *PodsUIModel) writeStatusLine(w io.Writer) {
 	if status := u.currentStatus(); status != "" {
-		fmt.Fprintln(w, u.style.yellow(status))
+		fmt.Fprintln(w, renderBadge(status, lipgloss.Color(u.style.yellowHex), lipgloss.Color("#332613"), true))
 	}
 }
 
@@ -234,7 +241,35 @@ func (u *PodsUIModel) currentStatus() string {
 	return status
 }
 
-func (u *PodsUIModel) writeContextBar(w io.Writer, visiblePods []*Pod, filteredPods []*Pod) {
+func (u *PodsUIModel) renderHeader(stats Stats, visiblePods []*Pod, filteredPods []*Pod) string {
+	leftPaneWidth := u.leftPaneWidth()
+	if leftPaneWidth == 0 {
+		leftPaneWidth = u.width
+	}
+	if leftPaneWidth <= 0 {
+		leftPaneWidth = 96
+	}
+
+	overview := u.renderOverviewPanel(stats, visiblePods, filteredPods)
+	controls := u.renderControlsPanel(filteredPods)
+
+	header := joinSections(overview, controls)
+	if leftPaneWidth >= 110 {
+		controlsWidth := 42
+		if leftPaneWidth < 150 {
+			controlsWidth = 36
+		}
+		overviewWidth := leftPaneWidth - controlsWidth - 3
+		if overviewWidth < 44 {
+			overviewWidth = 44
+		}
+		header = strings.TrimRight(sideBySideFixed(overview, controls, overviewWidth, controlsWidth, 3), "\n")
+	}
+
+	return strings.TrimRight(header+"\n"+u.renderSectionDivider(), "\n")
+}
+
+func (u *PodsUIModel) renderOverviewPanel(stats Stats, visiblePods []*Pod, filteredPods []*Pod) string {
 	namespace := u.namespace
 	if namespace == "" {
 		namespace = "all"
@@ -245,46 +280,72 @@ func (u *PodsUIModel) writeContextBar(w io.Writer, visiblePods []*Pod, filteredP
 	}
 
 	unhealthy := countUnhealthyPods(visiblePods)
-	parts := []string{
-		fmt.Sprintf("Ctx: %s", contextName),
-		fmt.Sprintf("NS: %s", namespace),
-		fmt.Sprintf("Pods: %d", len(visiblePods)),
-		fmt.Sprintf("Unhealthy: %d", unhealthy),
-		fmt.Sprintf("Sort: %s", u.sortLabel()),
-		fmt.Sprintf("Group: %s", u.groupModeLabel()),
-		fmt.Sprintf("Time: %s", time.Now().Format("15:04:05")),
-	}
-	if len(filteredPods) != len(visiblePods) {
-		parts = append(parts, fmt.Sprintf("Shown: %d", len(filteredPods)))
-	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s  %s  %s\n",
+		renderBadge("K8S PODS", lipgloss.Color("#0F172A"), lipgloss.Color("#67E8F9"), true),
+		renderMetaField("Context", contextName),
+		renderMetaField("Namespace", namespace),
+	)
+	fmt.Fprintf(&b, "%s  %s  %s  %s  %s\n",
+		renderMetaField("Pods", fmt.Sprintf("%d", len(visiblePods))),
+		renderMetaField("Shown", fmt.Sprintf("%d", len(filteredPods))),
+		renderMetaFieldWithColor("Unhealthy", fmt.Sprintf("%d", unhealthy), u.unhealthyBadgeColor(unhealthy)),
+		renderMetaField("Sort", u.sortLabel()),
+		renderMetaField("Group", u.groupModeLabel()),
+	)
+	fmt.Fprintf(&b, "%s\n", renderMetaField("Time", time.Now().Format("15:04:05")))
 
-	fmt.Fprintln(w, podsHeaderStyle(strings.Join(parts, " | ")))
-}
-
-func (u *PodsUIModel) writeClusterSummary(w io.Writer, stats Stats, pods []*Pod) {
 	for _, res := range u.resources {
 		allocatable := stats.AllocatableResources[res]
-		used := sumUsedResource(pods, res)
+		used := sumUsedResource(visiblePods, res)
 		pctUsed := quantityPct(used, allocatable)
-		avgPct := averagePodUsagePct(pods, res)
+		avgPct := averagePodUsagePct(visiblePods, res)
 
-		fmt.Fprintf(w, "%s %s  %s/%s  avg %s\n",
+		line := fmt.Sprintf("%s %s  %s/%s  %s",
 			u.resourceLabel(res),
 			u.renderUsageBar(res, pctUsed, u.summaryBarWidth()),
 			formatResourceQuantity(res, used),
 			formatResourceQuantity(res, allocatable),
-			u.colorizePct(avgPct, resourceSeverity(avgPct)),
+			renderBadge(
+				fmt.Sprintf("avg %s", u.colorizePct(avgPct, resourceSeverity(avgPct))),
+				podsSurfaceText,
+				podsSurfaceAltBg,
+				false,
+			),
 		)
+		fmt.Fprintln(&b, renderSummaryStrip(line))
 	}
+
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func (u *PodsUIModel) renderControlsPanel(filteredPods []*Pod) string {
+	pageLabel := "1/1"
+	if u.paginator.TotalPages > 0 {
+		pageLabel = fmt.Sprintf("%d/%d", u.paginator.Page+1, u.paginator.TotalPages)
+	}
+
+	var b strings.Builder
+	fmt.Fprintln(&b, renderMetaField("Page", pageLabel))
+	fmt.Fprintln(&b, renderShortcutLine("c/m/s", "Sort CPU MEM Status"))
+	fmt.Fprintln(&b, renderShortcutLine("g", "Cycle grouping"))
+	fmt.Fprintln(&b, renderShortcutLine("i", "Toggle details"))
+	fmt.Fprintln(&b, renderShortcutLine("/", "Filter pods"))
+	fmt.Fprintln(&b, renderShortcutLine("esc", "Clear filter"))
+	fmt.Fprintln(&b, renderShortcutLine("←/→", "Change page"))
+	fmt.Fprintln(&b, renderShortcutLine("q", "Quit"))
+	if strings.TrimSpace(u.filterQuery) != "" {
+		fmt.Fprintln(&b, renderMetaField("Filter", u.filterQuery))
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
 
 func (u *PodsUIModel) renderPage(w io.Writer, page []podGroup, nodeAliases map[string]string) {
 	for groupIndex, group := range page {
 		if group.showHeader {
-			fmt.Fprintf(w, "%s %s %s\n",
-				podsGroupStyle(group.label),
-				podsMutedStyle("("),
-				podsMutedStyle(fmt.Sprintf("%d pods)", group.totalPods)),
+			fmt.Fprintf(w, "%s %s\n",
+				renderBadge(group.label, podsSurfaceText, podsSurfaceBg, true),
+				renderBadge(fmt.Sprintf("%d pods", group.totalPods), podsSurfaceMuted, podsSurfaceAltBg, false),
 			)
 		}
 		for _, pod := range group.pods {
@@ -298,17 +359,18 @@ func (u *PodsUIModel) renderPage(w io.Writer, page []podGroup, nodeAliases map[s
 
 func (u *PodsUIModel) renderPod(w io.Writer, pod *Pod, nodeAliases map[string]string) {
 	health := pod.Health()
+	severity := podAttentionSeverity(pod, u.resources)
 	name := pod.Name()
 	if u.groupMode == groupModeFlat {
 		name = pod.FullName()
 	}
 	name = u.renderPodName(name, pod)
 
-	nodeSummary := "pending"
+	nodeSummary := renderBadge("pending", lipgloss.Color(u.style.yellowHex), lipgloss.Color("#332613"), true)
 	if pod.NodeName() != "" {
-		nodeSummary = podsAliasStyle(nodeAlias(nodeAliases, pod.NodeName()))
+		nodeSummary = renderBadge(nodeAlias(nodeAliases, pod.NodeName()), podsSurfaceMuted, podsSurfaceAltBg, false)
 		if u.showDetails {
-			nodeSummary = fmt.Sprintf("%s (%s)", nodeSummary, pod.NodeName())
+			nodeSummary = renderBadge(fmt.Sprintf("%s (%s)", nodeAlias(nodeAliases, pod.NodeName()), pod.NodeName()), podsSurfaceMuted, podsSurfaceAltBg, false)
 		}
 	}
 
@@ -317,10 +379,14 @@ func (u *PodsUIModel) renderPod(w io.Writer, pod *Pod, nodeAliases map[string]st
 		nodeSummary,
 	}
 	if restarts := pod.Restarts(); restarts > 0 {
-		extras = append(extras, u.style.yellow(fmt.Sprintf("%dr", restarts)))
+		extras = append(extras, renderBadge(fmt.Sprintf("%dr", restarts), lipgloss.Color(u.style.yellowHex), lipgloss.Color("#332613"), true))
 	}
 
-	fmt.Fprintf(w, "  %s  %s\n", name, strings.Join(extras, "  "))
+	fmt.Fprintf(w, "  %s %s  %s\n",
+		lipgloss.NewStyle().Foreground(u.style.SeverityColor(severity)).Bold(true).Render("▎"),
+		name,
+		strings.Join(extras, " "),
+	)
 	usage := pod.Usage()
 	requested := pod.Requested()
 	limits := pod.Limits()
@@ -333,7 +399,10 @@ func (u *PodsUIModel) renderPod(w io.Writer, pod *Pod, nodeAliases map[string]st
 			summary.baselineLabel,
 		)
 		if u.showDetails {
-			fmt.Fprintf(w, "  req/lim %s/%s", summary.requestedLabel, limitLabelForResource(res, requested[res], limits))
+			fmt.Fprintf(w, "  %s %s",
+				renderBadge(fmt.Sprintf("req %s", summary.requestedLabel), podsSurfaceMuted, podsSurfaceAltBg, false),
+				renderBadge(fmt.Sprintf("lim %s", limitLabelForResource(res, requested[res], limits)), podsSurfaceMuted, podsSurfaceAltBg, false),
+			)
 		}
 		fmt.Fprintln(w)
 	}
@@ -341,12 +410,15 @@ func (u *PodsUIModel) renderPod(w io.Writer, pod *Pod, nodeAliases map[string]st
 
 func (u *PodsUIModel) writeFooter(w io.Writer) {
 	if u.filtering {
-		fmt.Fprintf(w, "Filter: %s\n", u.filterInput.View())
+		fmt.Fprintf(w, "%s %s\n", renderBadge("Filter", podsSurfaceText, podsSurfaceBg, true), u.filterInput.View())
 	} else if strings.TrimSpace(u.filterQuery) != "" {
-		fmt.Fprintf(w, "Filter: %s\n", podsAliasStyle(u.filterQuery))
+		fmt.Fprintf(w, "%s %s\n",
+			renderBadge("Filter", podsSurfaceText, podsSurfaceBg, true),
+			renderBadge(u.filterQuery, podsSurfaceMuted, podsSurfaceAltBg, false),
+		)
 	}
 	u.writeStatusLine(w)
-	fmt.Fprintln(w, podsHelpStyle("←/→ page • c cpu • m mem • s status • g group • i info • / filter • q quit"))
+	fmt.Fprintln(w, podsHelpStyle("page ←/→ • sort c/m/s • group g • info i • filter / • quit q"))
 }
 
 func (u *PodsUIModel) groupPods(pods []*Pod) []podGroup {
@@ -423,20 +495,29 @@ func (u *PodsUIModel) paginateGroups(groups []podGroup) [][]podGroup {
 	for _, group := range groups {
 		index := 0
 		for index < len(group.pods) {
+			separatorCost := 0
+			if len(page) > 0 {
+				separatorCost = 1
+			}
 			headerCost := 0
 			if group.showHeader {
 				headerCost = 1
 			}
 
-			required := linesPerPod + headerCost
+			required := linesPerPod + headerCost + separatorCost
 			if remaining < required && len(page) > 0 {
 				flushPage()
 			}
+			separatorCost = 0
+			if len(page) > 0 {
+				separatorCost = 1
+			}
+			required = linesPerPod + headerCost + separatorCost
 			if remaining < required {
 				remaining = required
 			}
 
-			fit := (remaining - headerCost) / linesPerPod
+			fit := (remaining - headerCost - separatorCost) / linesPerPod
 			if fit < 1 {
 				fit = 1
 			}
@@ -451,7 +532,7 @@ func (u *PodsUIModel) paginateGroups(groups []podGroup) [][]podGroup {
 				showHeader: group.showHeader,
 				pods:       group.pods[index : index+fit],
 			})
-			remaining -= headerCost + fit*linesPerPod
+			remaining -= separatorCost + headerCost + fit*linesPerPod
 			index += fit
 
 			if remaining < linesPerPod && index < len(group.pods) {
@@ -589,22 +670,31 @@ func (u *PodsUIModel) handleFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return u, cmd
 }
 
-func (u *PodsUIModel) combineWithNodeUsagePanel(left string, nodes []*Node, pods []*Pod, nodeAliases map[string]string) string {
-	if len(nodes) == 0 {
-		return left
-	}
+func (u *PodsUIModel) combineWithNodeUsagePanel(left string, nodes []*Node, pods []*Pod, filteredPods []*Pod, nodeAliases map[string]string) string {
 	if u.width > 0 && u.width < 150 {
 		return left
 	}
 
-	right := u.renderNodeUsagePanel(nodes, pods, nodeAliases)
-	if strings.TrimSpace(right) == "" {
+	if u.width <= 0 {
 		return left
 	}
-	return sideBySide(left, right, 3)
+
+	nodeSection := u.renderNodeUsagePanel(nodes, pods, nodeAliases)
+	if strings.TrimSpace(nodeSection) == "" {
+		nodeSection = u.renderNodeUsagePlaceholder()
+	}
+	rightSections := []string{
+		u.renderSignalsPanel(nodes, pods, filteredPods),
+		nodeSection,
+	}
+	right := strings.TrimSpace(joinSections(rightSections...))
+	return sideBySideFixed(left, right, u.leftPaneWidth(), u.rightPaneWidth(), 3)
 }
 
 func (u *PodsUIModel) renderNodeUsagePanel(nodes []*Node, pods []*Pod, nodeAliases map[string]string) string {
+	if len(nodes) == 0 {
+		return ""
+	}
 	nodeUsage := map[string]v1.ResourceList{}
 	nodeAssigned := map[string]v1.ResourceList{}
 	for _, pod := range pods {
@@ -637,6 +727,9 @@ func (u *PodsUIModel) renderNodeUsagePanel(nodes []*Node, pods []*Pod, nodeAlias
 		rows = append(rows, nodeUsageRow{
 			name:        node.Name(),
 			alias:       nodeAlias(nodeAliases, node.Name()),
+			ready:       node.Ready(),
+			cordoned:    node.Cordoned(),
+			pods:        node.NumPods(),
 			cpuPct:      quantityPct(used[v1.ResourceCPU], alloc[v1.ResourceCPU]),
 			memPct:      quantityPct(used[v1.ResourceMemory], alloc[v1.ResourceMemory]),
 			cpuUsed:     used[v1.ResourceCPU],
@@ -656,13 +749,23 @@ func (u *PodsUIModel) renderNodeUsagePanel(nodes []*Node, pods []*Pod, nodeAlias
 	})
 
 	var b strings.Builder
-	fmt.Fprintln(&b, podsHeaderStyle("Node Pressure"))
+	fmt.Fprintln(&b, renderBadge("NODE PRESSURE", lipgloss.Color("#0F172A"), lipgloss.Color("#7DD3FC"), true))
 	for _, row := range rows {
-		name := row.alias
+		name := renderBadge(row.alias, podsSurfaceText, podsSurfaceAltBg, true)
 		if u.showDetails {
-			name = fmt.Sprintf("%s (%s)", row.alias, row.name)
+			name = renderBadge(fmt.Sprintf("%s (%s)", row.alias, row.name), podsSurfaceText, podsSurfaceAltBg, true)
 		}
-		fmt.Fprintln(&b, name)
+		parts := []string{
+			name,
+			renderBadge(fmt.Sprintf("%d pods", row.pods), podsSurfaceMuted, podsSurfaceAltBg, false),
+		}
+		if !row.ready {
+			parts = append(parts, renderBadge("NotReady", lipgloss.Color(u.style.redHex), lipgloss.Color("#33191E"), true))
+		}
+		if row.cordoned {
+			parts = append(parts, renderBadge("Cordoned", lipgloss.Color(u.style.yellowHex), lipgloss.Color("#332613"), true))
+		}
+		fmt.Fprintln(&b, strings.Join(parts, " "))
 		fmt.Fprintf(&b, "  %s %s  %s/%s  asg %s/%s\n",
 			u.resourceLabel(v1.ResourceCPU),
 			u.renderUsageBar(v1.ResourceCPU, row.cpuPct, u.nodeBarWidth()),
@@ -683,6 +786,52 @@ func (u *PodsUIModel) renderNodeUsagePanel(nodes []*Node, pods []*Pod, nodeAlias
 	return strings.TrimRight(b.String(), "\n")
 }
 
+func (u *PodsUIModel) renderSignalsPanel(nodes []*Node, pods []*Pod, filteredPods []*Pod) string {
+	rightWidth := u.rightPaneWidth()
+	if rightWidth == 0 {
+		return ""
+	}
+
+	pageLabel := "1/1"
+	if u.paginator.TotalPages > 0 {
+		pageLabel = fmt.Sprintf("%d/%d", u.paginator.Page+1, u.paginator.TotalPages)
+	}
+
+	var b strings.Builder
+	fmt.Fprintln(&b, renderBadge("HIGHLIGHTS", lipgloss.Color("#0F172A"), lipgloss.Color("#A78BFA"), true))
+	fmt.Fprintln(&b, strings.Join([]string{
+		renderBadge(fmt.Sprintf("%d nodes", len(nodes)), podsSurfaceText, podsSurfaceAltBg, true),
+		renderBadge(fmt.Sprintf("%d shown", len(filteredPods)), podsSurfaceText, podsSurfaceAltBg, true),
+		renderBadge(fmt.Sprintf("page %s", pageLabel), podsSurfaceMuted, podsSurfaceAltBg, false),
+	}, " "))
+
+	if pod, pct := u.topUsagePod(filteredPods, v1.ResourceCPU); pod != nil {
+		fmt.Fprintln(&b, u.renderSignalRow("CPU hot", pod.Name(), fmt.Sprintf("%.0f%%", pct*100), PodHealthWarning, rightWidth))
+	}
+	if pod, pct := u.topUsagePod(filteredPods, v1.ResourceMemory); pod != nil {
+		fmt.Fprintln(&b, u.renderSignalRow("MEM hot", pod.Name(), fmt.Sprintf("%.0f%%", pct*100), PodHealthHealthy, rightWidth))
+	}
+	if pod, restarts := topRestartPod(filteredPods); pod != nil && restarts > 0 {
+		fmt.Fprintln(&b, u.renderSignalRow("Restarts", pod.Name(), fmt.Sprintf("%dr", restarts), PodHealthWarning, rightWidth))
+	} else {
+		fmt.Fprintln(&b, u.renderSignalRow("Restarts", "Stable", "0r", PodHealthHealthy, rightWidth))
+	}
+	if pod := firstUnhealthyPod(filteredPods); pod != nil {
+		fmt.Fprintln(&b, u.renderSignalRow("Watch", pod.Name(), pod.Health().Label, pod.Health().Severity, rightWidth))
+	} else {
+		fmt.Fprintln(&b, u.renderSignalRow("Watch", "Cluster healthy", "OK", PodHealthHealthy, rightWidth))
+	}
+
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func (u *PodsUIModel) renderNodeUsagePlaceholder() string {
+	var b strings.Builder
+	fmt.Fprintln(&b, renderBadge("NODE PRESSURE", lipgloss.Color("#0F172A"), lipgloss.Color("#7DD3FC"), true))
+	fmt.Fprintln(&b, renderBadge("Waiting for node data...", podsSurfaceMuted, podsSurfaceAltBg, false))
+	return strings.TrimRight(b.String(), "\n")
+}
+
 func (u *PodsUIModel) renderPodName(name string, pod *Pod) string {
 	severity := podAttentionSeverity(pod, u.resources)
 	return lipgloss.NewStyle().
@@ -692,8 +841,8 @@ func (u *PodsUIModel) renderPodName(name string, pod *Pod) string {
 }
 
 func (u *PodsUIModel) renderHealth(health PodHealth) string {
-	style := lipgloss.NewStyle().Foreground(u.style.SeverityColor(health.Severity))
-	return style.Render(fmt.Sprintf("%s %s", health.Icon, health.Label))
+	fg, bg := u.severityBadgeColors(health.Severity)
+	return renderBadge(fmt.Sprintf("%s %s", health.Icon, health.Label), fg, bg, true)
 }
 
 func (u *PodsUIModel) resourceLabel(resourceName v1.ResourceName) string {
@@ -711,8 +860,6 @@ func (u *PodsUIModel) renderUsageBar(resourceName v1.ResourceName, pct float64, 
 	if width < 10 {
 		width = 10
 	}
-	fillStyle := u.resourceBarFill(resourceName)
-	labelStyle := lipgloss.NewStyle().Foreground(u.style.SeverityColor(resourceSeverity(pct))).Bold(true).Render
 	label := fmt.Sprintf("%.0f%%", pct*100)
 	if pct*100 >= 1000 {
 		label = "999%+"
@@ -722,17 +869,18 @@ func (u *PodsUIModel) renderUsageBar(resourceName v1.ResourceName, pct float64, 
 	filled := int(math.Round(boundedPct * float64(width)))
 	warnAt := int(math.Round(0.7 * float64(width)))
 	criticalAt := int(math.Round(0.9 * float64(width)))
+	fillBG, emptyBG, markerBG := resourceBarPalette(resourceName)
 
 	cells := make([]string, width)
 	for i := 0; i < width; i++ {
-		switch {
-		case i < filled:
-			cells[i] = fillStyle("█")
-		case i == warnAt-1 || i == criticalAt-1:
-			cells[i] = podsBarMarkerStyle("│")
-		default:
-			cells[i] = podsBarEmptyStyle("░")
+		background := emptyBG
+		if i == warnAt-1 || i == criticalAt-1 {
+			background = markerBG
 		}
+		if i < filled {
+			background = fillBG
+		}
+		cells[i] = lipgloss.NewStyle().Background(background).Render(" ")
 	}
 
 	if len(label) < width {
@@ -740,22 +888,35 @@ func (u *PodsUIModel) renderUsageBar(resourceName v1.ResourceName, pct float64, 
 		for offset, r := range label {
 			index := start + offset
 			if index >= 0 && index < width {
-				cells[index] = labelStyle(string(r))
+				background := emptyBG
+				if index == warnAt-1 || index == criticalAt-1 {
+					background = markerBG
+				}
+				labelFG := podsSurfaceText
+				if index < filled {
+					background = fillBG
+					labelFG = lipgloss.Color("#0F172A")
+				}
+				cells[index] = lipgloss.NewStyle().
+					Foreground(labelFG).
+					Background(background).
+					Bold(true).
+					Render(string(r))
 			}
 		}
 	}
 
-	return "[" + strings.Join(cells, "") + "]"
+	return podsBarShellStyle("▕") + strings.Join(cells, "") + podsBarShellStyle("▏")
 }
 
-func (u *PodsUIModel) resourceBarFill(resourceName v1.ResourceName) func(...string) string {
+func resourceBarPalette(resourceName v1.ResourceName) (fill lipgloss.Color, empty lipgloss.Color, marker lipgloss.Color) {
 	switch resourceName {
 	case v1.ResourceCPU:
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("#FB923C")).Render
+		return lipgloss.Color("#FB923C"), lipgloss.Color("#1B1E28"), lipgloss.Color("#2A1F18")
 	case v1.ResourceMemory:
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("#38BDF8")).Render
+		return lipgloss.Color("#38BDF8"), lipgloss.Color("#1B1E28"), lipgloss.Color("#1A2634")
 	default:
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("#22C55E")).Render
+		return lipgloss.Color("#22C55E"), lipgloss.Color("#1B1E28"), lipgloss.Color("#173124")
 	}
 }
 
@@ -766,34 +927,78 @@ func (u *PodsUIModel) colorizePct(pct float64, severity PodHealthSeverity) strin
 func (u *PodsUIModel) summaryBarWidth() int {
 	switch {
 	case u.width >= 190:
-		return 20
+		return 28
 	case u.width >= 150:
-		return 16
+		return 24
 	default:
-		return 12
+		return 18
 	}
 }
 
 func (u *PodsUIModel) resourceBarWidth() int {
-	switch {
-	case u.width >= 190:
-		return 18
-	case u.width >= 150:
-		return 16
-	default:
-		return 12
+	leftWidth := u.leftPaneWidth()
+	if leftWidth == 0 {
+		leftWidth = u.width
 	}
+	if leftWidth <= 0 {
+		return 18
+	}
+
+	target := leftWidth / 2
+	if u.showDetails {
+		target = leftWidth / 3
+	}
+
+	maxWidth := leftWidth - 28
+	if u.showDetails {
+		maxWidth = leftWidth - 48
+	}
+
+	if maxWidth < 18 {
+		maxWidth = 18
+	}
+	if target > maxWidth {
+		target = maxWidth
+	}
+	if target < 18 {
+		target = 18
+	}
+
+	return target
 }
 
 func (u *PodsUIModel) nodeBarWidth() int {
 	switch {
 	case u.width >= 190:
-		return 16
+		return 24
 	case u.width >= 150:
-		return 14
+		return 20
 	default:
-		return 12
+		return 18
 	}
+}
+
+func (u *PodsUIModel) rightPaneWidth() int {
+	switch {
+	case u.width >= 190:
+		return 72
+	case u.width >= 150:
+		return 64
+	default:
+		return 0
+	}
+}
+
+func (u *PodsUIModel) leftPaneWidth() int {
+	rightWidth := u.rightPaneWidth()
+	if rightWidth == 0 || u.width <= 0 {
+		return 0
+	}
+	leftWidth := u.width - rightWidth - 3
+	if leftWidth < 60 {
+		return 60
+	}
+	return leftWidth
 }
 
 func (u *PodsUIModel) linesPerPod() int {
@@ -813,7 +1018,7 @@ func (u *PodsUIModel) availablePodLines() int {
 		footerLines++
 	}
 
-	headerLines := 1 + len(u.resources) + 1
+	headerLines := renderedLineCount(u.renderHeader(u.cluster.Stats(), u.cluster.VisiblePods(), u.filterPods(u.cluster.VisiblePods())))
 	lines := u.height - headerLines - footerLines
 	if lines < u.linesPerPod() {
 		return u.linesPerPod()
@@ -848,6 +1053,119 @@ func (u *PodsUIModel) groupModeLabel() string {
 		return "flat"
 	default:
 		return "namespace"
+	}
+}
+
+func (u *PodsUIModel) renderSectionDivider() string {
+	width := u.width
+	if leftWidth := u.leftPaneWidth(); leftWidth > 0 {
+		width = leftWidth
+	}
+	if width <= 0 {
+		width = 72
+	}
+	width -= 2
+	if width < 18 {
+		width = 18
+	}
+	divider := strings.Repeat("━", width)
+	return lipgloss.NewStyle().Foreground(lipgloss.Color("#272A36")).Render(divider)
+}
+
+func renderMetaField(label string, value string) string {
+	return renderMetaFieldWithColor(label, value, podsSurfaceText)
+}
+
+func renderMetaFieldWithColor(label string, value string, valueColor lipgloss.TerminalColor) string {
+	labelPart := lipgloss.NewStyle().Foreground(lipgloss.Color("#F59E0B")).Render(label + ":")
+	valuePart := lipgloss.NewStyle().Foreground(valueColor).Bold(true).Render(value)
+	return labelPart + " " + valuePart
+}
+
+func renderShortcutLine(key string, label string) string {
+	return renderBadge(key, lipgloss.Color("#60A5FA"), lipgloss.Color("#111827"), true) + " " +
+		lipgloss.NewStyle().Foreground(podsSurfaceMuted).Render(label)
+}
+
+func (u *PodsUIModel) renderSignalRow(label string, name string, value string, severity PodHealthSeverity, panelWidth int) string {
+	fg, bg := u.severityBadgeColors(severity)
+	nameWidth := panelWidth - len(label) - len(value) - 10
+	if nameWidth < 12 {
+		nameWidth = 12
+	}
+	name = truncateRunes(name, nameWidth)
+	return strings.Join([]string{
+		renderBadge(label, fg, bg, true),
+		renderBadge(name, podsSurfaceText, podsSurfaceBg, true),
+		renderBadge(value, podsSurfaceMuted, podsSurfaceAltBg, false),
+	}, " ")
+}
+
+func renderSummaryStrip(content string) string {
+	return lipgloss.NewStyle().
+		Background(lipgloss.Color("#11141D")).
+		Foreground(podsSurfaceText).
+		Padding(0, 1).
+		Render(content)
+}
+
+func renderBadge(text string, fg lipgloss.TerminalColor, bg lipgloss.TerminalColor, bold bool) string {
+	style := lipgloss.NewStyle().Foreground(fg).Background(bg).Padding(0, 1)
+	if bold {
+		style = style.Bold(true)
+	}
+	return style.Render(text)
+}
+
+func joinSections(parts ...string) string {
+	sections := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if strings.TrimSpace(part) == "" {
+			continue
+		}
+		sections = append(sections, strings.TrimSpace(part))
+	}
+	return strings.Join(sections, "\n\n")
+}
+
+func renderedLineCount(text string) int {
+	trimmed := strings.TrimRight(text, "\n")
+	if trimmed == "" {
+		return 0
+	}
+	return strings.Count(trimmed, "\n") + 1
+}
+
+func truncateRunes(text string, limit int) string {
+	runes := []rune(text)
+	if limit <= 0 || len(runes) <= limit {
+		return text
+	}
+	if limit <= 1 {
+		return string(runes[:limit])
+	}
+	return string(runes[:limit-1]) + "…"
+}
+
+func (u *PodsUIModel) severityBadgeColors(severity PodHealthSeverity) (lipgloss.Color, lipgloss.Color) {
+	switch severity {
+	case PodHealthCritical:
+		return lipgloss.Color(u.style.redHex), lipgloss.Color("#33191E")
+	case PodHealthWarning:
+		return lipgloss.Color(u.style.yellowHex), lipgloss.Color("#332613")
+	default:
+		return lipgloss.Color(u.style.greenHex), lipgloss.Color("#0F2A22")
+	}
+}
+
+func (u *PodsUIModel) unhealthyBadgeColor(unhealthy int) lipgloss.Color {
+	switch {
+	case unhealthy >= 3:
+		return lipgloss.Color(u.style.redHex)
+	case unhealthy > 0:
+		return lipgloss.Color(u.style.yellowHex)
+	default:
+		return lipgloss.Color(u.style.greenHex)
 	}
 }
 
@@ -925,6 +1243,28 @@ func countUnhealthyPods(pods []*Pod) int {
 	return count
 }
 
+func firstUnhealthyPod(pods []*Pod) *Pod {
+	for _, pod := range pods {
+		if pod.Health().Severity > PodHealthHealthy {
+			return pod
+		}
+	}
+	return nil
+}
+
+func topRestartPod(pods []*Pod) (*Pod, int) {
+	var top *Pod
+	maxRestarts := 0
+	for _, pod := range pods {
+		restarts := pod.Restarts()
+		if top == nil || restarts > maxRestarts {
+			top = pod
+			maxRestarts = restarts
+		}
+	}
+	return top, maxRestarts
+}
+
 func averagePodUsagePct(pods []*Pod, resourceName v1.ResourceName) float64 {
 	if len(pods) == 0 {
 		return 0
@@ -944,6 +1284,19 @@ func averagePodUsagePct(pods []*Pod, resourceName v1.ResourceName) float64 {
 		return 0
 	}
 	return total / float64(count)
+}
+
+func (u *PodsUIModel) topUsagePod(pods []*Pod, resourceName v1.ResourceName) (*Pod, float64) {
+	var top *Pod
+	topPct := 0.0
+	for _, pod := range pods {
+		summary := summarizePodUsage(resourceName, pod.Usage()[resourceName], pod.Requested()[resourceName], pod.Limits())
+		if top == nil || summary.pct > topPct {
+			top = pod
+			topPct = summary.pct
+		}
+	}
+	return top, topPct
 }
 
 func summarizePodUsage(resourceName v1.ResourceName, used resource.Quantity, requested resource.Quantity, limits v1.ResourceList) podUsageSnapshot {
@@ -1090,6 +1443,51 @@ func sideBySide(left, right string, gap int) string {
 		fmt.Fprintf(&b, "%s%s%s\n", leftLine, strings.Repeat(" ", padding), rightLine)
 	}
 	return b.String()
+}
+
+func sideBySideFixed(left, right string, leftWidth, rightWidth, gap int) string {
+	left = strings.TrimRight(left, "\n")
+	right = strings.TrimRight(right, "\n")
+	leftLines := strings.Split(left, "\n")
+	rightLines := strings.Split(right, "\n")
+	maxLines := int(math.Max(float64(len(leftLines)), float64(len(rightLines))))
+
+	var b strings.Builder
+	separator := strings.Repeat(" ", gap)
+	if gap >= 3 {
+		separator = " " + lipgloss.NewStyle().Foreground(lipgloss.Color("#272A36")).Render("│") + " "
+	}
+	for i := 0; i < maxLines; i++ {
+		leftLine := ""
+		rightLine := ""
+		if i < len(leftLines) {
+			leftLine = fitANSIWidth(leftLines[i], leftWidth)
+		}
+		if i < len(rightLines) {
+			rightLine = fitANSIWidth(rightLines[i], rightWidth)
+		}
+
+		leftPadding := 0
+		if leftWidth > 0 {
+			leftPadding = leftWidth - ansi.StringWidth(leftLine)
+			if leftPadding < 0 {
+				leftPadding = 0
+			}
+		}
+
+		fmt.Fprintf(&b, "%s%s%s%s\n", leftLine, strings.Repeat(" ", leftPadding), separator, rightLine)
+	}
+	return b.String()
+}
+
+func fitANSIWidth(line string, width int) string {
+	if width <= 0 {
+		return line
+	}
+	if ansi.StringWidth(line) <= width {
+		return line
+	}
+	return ansi.Truncate(line, width, "")
 }
 
 func (u *PodsUIModel) SetResources(resources []string) {

@@ -162,3 +162,57 @@ func TestPodRestartsSumsInitAndAppContainers(t *testing.T) {
 		t.Fatalf("Restarts() = %d, want %d", got, want)
 	}
 }
+
+func TestPodHealthRunningReadyIgnoresHistoricalRestartReason(t *testing.T) {
+	pod := testPod("default", "mypod")
+	pod.Status.Phase = v1.PodRunning
+	pod.Status.Conditions = []v1.PodCondition{{
+		Type:   v1.PodReady,
+		Status: v1.ConditionTrue,
+	}}
+	pod.Status.ContainerStatuses = []v1.ContainerStatus{{
+		Name:         "container",
+		Ready:        true,
+		RestartCount: 6,
+		State: v1.ContainerState{
+			Running: &v1.ContainerStateRunning{},
+		},
+		LastTerminationState: v1.ContainerState{
+			Terminated: &v1.ContainerStateTerminated{
+				Reason:   "Unknown",
+				ExitCode: 255,
+			},
+		},
+	}}
+
+	health := model.NewPod(pod).Health()
+	if got, want := health.Label, "Running"; got != want {
+		t.Fatalf("label = %q, want %q", got, want)
+	}
+	if got, want := health.Severity, model.PodHealthHealthy; got != want {
+		t.Fatalf("severity = %v, want %v", got, want)
+	}
+}
+
+func TestPodHealthRunningNotReadyWarns(t *testing.T) {
+	pod := testPod("default", "mypod")
+	pod.Status.Phase = v1.PodRunning
+	pod.Status.Conditions = []v1.PodCondition{{
+		Type:   v1.PodReady,
+		Status: v1.ConditionFalse,
+	}}
+	pod.Status.ContainerStatuses = []v1.ContainerStatus{{
+		Name: "container",
+		State: v1.ContainerState{
+			Running: &v1.ContainerStateRunning{},
+		},
+	}}
+
+	health := model.NewPod(pod).Health()
+	if got, want := health.Label, "NotReady"; got != want {
+		t.Fatalf("label = %q, want %q", got, want)
+	}
+	if got, want := health.Severity, model.PodHealthWarning; got != want {
+		t.Fatalf("severity = %v, want %v", got, want)
+	}
+}

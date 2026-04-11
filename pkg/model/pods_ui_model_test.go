@@ -179,7 +179,7 @@ func TestPodsUIModelViewShowsNamespaceGroupingAndNodeAliases(t *testing.T) {
 	uiModel.Cluster().AddPod(pod)
 
 	got := uiModel.View()
-	if !strings.Contains(got, "Ctx: prod-cluster") {
+	if !strings.Contains(got, "Context: prod-cluster") {
 		t.Fatalf("View() missing context bar, got %q", got)
 	}
 	if !strings.Contains(got, "reporting") {

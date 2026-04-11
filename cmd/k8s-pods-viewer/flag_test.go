@@ -92,6 +92,9 @@ func TestParseFlagsDefaults(t *testing.T) {
 	if got, want := flags.Style, "#04B575,#FFFF00,#FF0000"; got != want {
 		t.Fatalf("Style = %q, want %q", got, want)
 	}
+	if flags.AltScreen {
+		t.Fatalf("AltScreen = true, want false")
+	}
 }
 
 func TestParseFlagsConfigFile(t *testing.T) {
@@ -105,6 +108,7 @@ func TestParseFlagsConfigFile(t *testing.T) {
 		"pod-sort = memory=asc",
 		"resources = cpu,memory,ephemeral-storage",
 		"style = #111111,#222222,#333333",
+		"alt-screen = true",
 	}, "\n"))
 	unsetEnv(t, "KUBECONFIG")
 	withArgs(t)
@@ -137,6 +141,9 @@ func TestParseFlagsConfigFile(t *testing.T) {
 	}
 	if got, want := flags.Style, "#111111,#222222,#333333"; got != want {
 		t.Fatalf("Style = %q, want %q", got, want)
+	}
+	if !flags.AltScreen {
+		t.Fatalf("AltScreen = false, want true")
 	}
 }
 
@@ -176,6 +183,7 @@ func TestParseFlagsCLIOverridesConfigAndEnv(t *testing.T) {
 		"--pod-sort", "creation=dsc",
 		"--resources", "memory,cpu",
 		"--style", "#abcdef,#123456,#654321",
+		"--alt-screen",
 		"--attribution",
 	)
 
@@ -207,6 +215,9 @@ func TestParseFlagsCLIOverridesConfigAndEnv(t *testing.T) {
 	}
 	if got, want := flags.Style, "#abcdef,#123456,#654321"; got != want {
 		t.Fatalf("Style = %q, want %q", got, want)
+	}
+	if !flags.AltScreen {
+		t.Fatalf("AltScreen = false, want true")
 	}
 	if !flags.ShowAttribution {
 		t.Fatalf("ShowAttribution = false, want true")

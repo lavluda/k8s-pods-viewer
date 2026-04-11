@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"k8s.io/client-go/util/homedir"
@@ -49,6 +50,7 @@ type Flags struct {
 	PodSort         string
 	Style           string
 	Resources       string
+	AltScreen       bool
 	ShowAttribution bool
 	Version         bool
 }
@@ -89,6 +91,9 @@ func ParseFlags() (Flags, error) {
 	styleDefault := cfg.getValue("style", "#04B575,#FFFF00,#FF0000")
 	flagSet.StringVar(&flags.Style, "style", styleDefault, "Three colors for styling 'good','ok' and 'bad' values")
 
+	altScreenDefault := cfg.getBool("alt-screen", false)
+	flagSet.BoolVar(&flags.AltScreen, "alt-screen", altScreenDefault, "Run in the terminal alternate screen buffer")
+
 	flagSet.BoolVar(&flags.ShowAttribution, "attribution", false, "Show the Open Source Attribution")
 
 	if err := flagSet.Parse(os.Args[1:]); err != nil {
@@ -112,6 +117,18 @@ func (c configFile) getValue(key, defaultValue string) string {
 		return val
 	}
 	return defaultValue
+}
+
+func (c configFile) getBool(key string, defaultValue bool) bool {
+	val, ok := c[key]
+	if !ok {
+		return defaultValue
+	}
+	parsed, err := strconv.ParseBool(strings.TrimSpace(val))
+	if err != nil {
+		return defaultValue
+	}
+	return parsed
 }
 
 func loadConfigFile() (configFile, error) {
