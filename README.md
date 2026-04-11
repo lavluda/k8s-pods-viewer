@@ -214,17 +214,6 @@ Run the release flag matrix:
 make test-release
 ```
 
-## Homebrew Releases
-
-Tagged releases update the Homebrew tap formula in `lavluda/homebrew-tap`
-through GoReleaser.
-
-Maintainer setup:
-
-- create the `lavluda/homebrew-tap` repository with a `Formula/` directory
-- add a `TAP_GITHUB_TOKEN` repository secret in this repo
-- the token must have `contents: write` access to `lavluda/homebrew-tap`
-
 ## Acknowledgments
 
 This project was inspired by [awslabs/eks-node-viewer](https://github.com/awslabs/eks-node-viewer).
