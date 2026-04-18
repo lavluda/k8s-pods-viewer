@@ -28,6 +28,7 @@ type runtimeConfig struct {
 	nodeSelector labels.Selector
 	podSelector  labels.Selector
 	resources    []string
+	namespace    string
 }
 
 func prepareRuntimeConfig(flags Flags) (*runtimeConfig, error) {
@@ -53,5 +54,15 @@ func prepareRuntimeConfig(flags Flags) (*runtimeConfig, error) {
 		resources: strings.FieldsFunc(flags.Resources, func(r rune) bool {
 			return r == ','
 		}),
+		namespace: normalizeNamespace(flags.Namespace),
 	}, nil
+}
+
+func normalizeNamespace(namespace string) string {
+	switch strings.ToLower(strings.TrimSpace(namespace)) {
+	case "", "all", "*":
+		return ""
+	default:
+		return strings.TrimSpace(namespace)
+	}
 }

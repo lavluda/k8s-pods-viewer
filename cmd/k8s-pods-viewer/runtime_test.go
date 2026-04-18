@@ -22,6 +22,7 @@ func TestPrepareRuntimeConfigSuccess(t *testing.T) {
 	runtime, err := prepareRuntimeConfig(Flags{
 		NodeSelector: "topology.kubernetes.io/zone=az1",
 		PodSelector:  "app=api",
+		Namespace:    "all",
 		Resources:    "cpu, memory ,ephemeral-storage",
 		Style:        "#04B575,#FFFF00,#FF0000",
 	})
@@ -40,6 +41,9 @@ func TestPrepareRuntimeConfigSuccess(t *testing.T) {
 	}
 	if runtime.style == nil {
 		t.Fatalf("style = nil, want non-nil")
+	}
+	if got, want := runtime.namespace, ""; got != want {
+		t.Fatalf("namespace = %q, want %q", got, want)
 	}
 }
 

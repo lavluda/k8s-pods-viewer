@@ -16,6 +16,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -52,9 +53,51 @@ func NewPodsController(kubeClient *kubernetes.Clientset, metricsClient *metricsc
 
 func (m PodsController) Start(ctx context.Context) {
 	cluster := m.uiModel.Cluster()
+	m.seedNodes(ctx, cluster)
+	m.seedPods(ctx, cluster)
 	m.startPodWatch(ctx, cluster)
 	m.startNodeWatch(ctx, cluster)
 	m.startPodMetricsPoller(ctx, cluster)
+}
+
+func (m PodsController) seedNodes(ctx context.Context, cluster *model.Cluster) {
+	nodeList, err := m.kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{
+		LabelSelector: m.nodeSelector.String(),
+	})
+	if err != nil {
+		m.uiModel.SetTransientStatus(fmt.Sprintf("Initial node fetch failed: %v", err), 12*time.Second)
+		return
+	}
+
+	for _, node := range nodeList.Items {
+		nodeCopy := node
+		n := cluster.AddNode(model.NewNode(&nodeCopy))
+		n.Show()
+	}
+}
+
+func (m PodsController) seedPods(ctx context.Context, cluster *model.Cluster) {
+	namespace := m.namespace
+	if namespace == "" {
+		namespace = v1.NamespaceAll
+	}
+
+	podList, err := m.kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: m.podSelector.String(),
+		FieldSelector: fields.Everything().String(),
+	})
+	if err != nil {
+		m.uiModel.SetTransientStatus(fmt.Sprintf("Initial pod fetch failed: %v", err), 12*time.Second)
+		return
+	}
+
+	for _, pod := range podList.Items {
+		podCopy := pod
+		if isTerminalPod(&podCopy) {
+			continue
+		}
+		cluster.AddPod(model.NewPod(&podCopy))
+	}
 }
 
 func (m PodsController) startNodeWatch(ctx context.Context, cluster *model.Cluster) {
@@ -68,29 +111,44 @@ func (m PodsController) startNodeWatch(ctx context.Context, cluster *model.Clust
 		time.Second*0,
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
-				node := model.NewNode(obj.(*v1.Node))
-				n := cluster.AddNode(node)
-				n.Show()
+				m.safeEvent("node add", func() {
+					node, ok := obj.(*v1.Node)
+					if !ok || node == nil {
+						panic(fmt.Sprintf("unexpected node add object %T", obj))
+					}
+					n := cluster.AddNode(model.NewNode(node))
+					n.Show()
+				})
 			},
 			DeleteFunc: func(obj interface{}) {
-				n := unwrapDeletedObject(obj).(*v1.Node)
-				cluster.DeleteNode(nodeKey(n))
+				m.safeEvent("node delete", func() {
+					n, ok := unwrapDeletedObject(obj).(*v1.Node)
+					if !ok || n == nil {
+						panic(fmt.Sprintf("unexpected node delete object %T", obj))
+					}
+					cluster.DeleteNode(nodeKey(n))
+				})
 			},
 			UpdateFunc: func(_, newObj interface{}) {
-				n := newObj.(*v1.Node)
-				if !n.DeletionTimestamp.IsZero() && len(n.Finalizers) == 0 {
-					cluster.DeleteNode(nodeKey(n))
-				} else {
-					node, ok := cluster.GetNode(nodeKey(n))
-					if ok {
-						node.Update(n)
-						node.Show()
+				m.safeEvent("node update", func() {
+					n, ok := newObj.(*v1.Node)
+					if !ok || n == nil {
+						panic(fmt.Sprintf("unexpected node update object %T", newObj))
 					}
-				}
+					if !n.DeletionTimestamp.IsZero() && len(n.Finalizers) == 0 {
+						cluster.DeleteNode(nodeKey(n))
+					} else {
+						node, ok := cluster.GetNode(nodeKey(n))
+						if ok {
+							node.Update(n)
+							node.Show()
+						}
+					}
+				})
 			},
 		},
 	)
-	go nodeController.Run(ctx.Done())
+	go m.runController(ctx, "node watch", nodeController.Run)
 }
 
 func (m PodsController) startPodWatch(ctx context.Context, cluster *model.Cluster) {
@@ -111,39 +169,54 @@ func (m PodsController) startPodWatch(ctx context.Context, cluster *model.Cluste
 		time.Second*0,
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
-				p := obj.(*v1.Pod)
-				if !isTerminalPod(p) {
-					cluster.AddPod(model.NewPod(p))
-				}
+				m.safeEvent("pod add", func() {
+					p, ok := obj.(*v1.Pod)
+					if !ok || p == nil {
+						panic(fmt.Sprintf("unexpected pod add object %T", obj))
+					}
+					if !isTerminalPod(p) {
+						cluster.AddPod(model.NewPod(p))
+					}
+				})
 			},
 			DeleteFunc: func(obj interface{}) {
-				p := unwrapDeletedObject(obj).(*v1.Pod)
-				cluster.DeletePod(p.Namespace, p.Name)
+				m.safeEvent("pod delete", func() {
+					p, ok := unwrapDeletedObject(obj).(*v1.Pod)
+					if !ok || p == nil {
+						panic(fmt.Sprintf("unexpected pod delete object %T", obj))
+					}
+					cluster.DeletePod(p.Namespace, p.Name)
+				})
 			},
 			UpdateFunc: func(_, newObj interface{}) {
-				p := newObj.(*v1.Pod)
-				if isTerminalPod(p) {
-					cluster.DeletePod(p.Namespace, p.Name)
-				} else {
-					pod, ok := cluster.GetPod(p.Namespace, p.Name)
-					if !ok {
-						cluster.AddPod(model.NewPod(p))
-					} else {
-						pod.Update(p)
-						cluster.AddPod(pod)
+				m.safeEvent("pod update", func() {
+					p, ok := newObj.(*v1.Pod)
+					if !ok || p == nil {
+						panic(fmt.Sprintf("unexpected pod update object %T", newObj))
 					}
-				}
+					if isTerminalPod(p) {
+						cluster.DeletePod(p.Namespace, p.Name)
+					} else {
+						pod, ok := cluster.GetPod(p.Namespace, p.Name)
+						if !ok {
+							cluster.AddPod(model.NewPod(p))
+						} else {
+							pod.Update(p)
+							cluster.AddPod(pod)
+						}
+					}
+				})
 			},
 		},
 	)
-	go podController.Run(ctx.Done())
+	go m.runController(ctx, "pod watch", podController.Run)
 }
 
 func (m PodsController) startPodMetricsPoller(ctx context.Context, cluster *model.Cluster) {
 	if m.metricsClient == nil {
 		return
 	}
-	go func() {
+	go m.runController(ctx, "metrics poller", func(stopCh <-chan struct{}) {
 		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
 
@@ -160,12 +233,12 @@ func (m PodsController) startPodMetricsPoller(ctx context.Context, cluster *mode
 			}
 
 			select {
-			case <-ctx.Done():
+			case <-stopCh:
 				return
 			case <-ticker.C:
 			}
 		}
-	}()
+	})
 }
 
 func (m PodsController) refreshPodMetrics(ctx context.Context, cluster *model.Cluster) error {
@@ -233,4 +306,22 @@ func unwrapDeletedObject(obj interface{}) interface{} {
 		return d.Obj
 	}
 	return obj
+}
+
+func (m PodsController) safeEvent(name string, fn func()) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			m.uiModel.SetTransientStatus(fmt.Sprintf("%s failed: %v", name, recovered), 10*time.Second)
+		}
+	}()
+	fn()
+}
+
+func (m PodsController) runController(ctx context.Context, name string, run func(stopCh <-chan struct{})) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			m.uiModel.SetTransientStatus(fmt.Sprintf("%s crashed: %v", name, recovered), 12*time.Second)
+		}
+	}()
+	run(ctx.Done())
 }

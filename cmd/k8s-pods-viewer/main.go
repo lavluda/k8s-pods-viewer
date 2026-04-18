@@ -63,7 +63,8 @@ func main() {
 	m := model.NewPodsUIModel(flags.PodSort, runtime.style)
 	m.SetResources(runtime.resources)
 	m.SetContextName(client.ResolveContextName(flags.Kubeconfig, flags.Context))
-	m.SetNamespace(flags.Namespace)
+	m.SetNamespace(runtime.namespace)
+	m.SetKubectlConfig(flags.Kubeconfig, flags.Context)
 	configureClientLogging(m)
 
 	cs, err := client.NewKubernetes(flags.Kubeconfig, flags.Context)
@@ -77,7 +78,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	controller := client.NewPodsController(cs, metricsClient, m, runtime.nodeSelector, runtime.podSelector, flags.Namespace)
+	controller := client.NewPodsController(cs, metricsClient, m, runtime.nodeSelector, runtime.podSelector, runtime.namespace)
 	controller.Start(ctx)
 
 	programOptions := []tea.ProgramOption{}
