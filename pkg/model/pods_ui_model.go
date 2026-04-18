@@ -92,24 +92,42 @@ type nodeUsageRow struct {
 }
 
 type PodsUIModel struct {
-	cluster     *Cluster
-	paginator   paginator.Model
-	filterInput textinput.Model
-	height      int
-	width       int
-	podSorter   func(lhs, rhs *Pod) bool
-	podSort     string
-	style       *Style
-	resources   []v1.ResourceName
-	contextName string
-	namespace   string
-	groupMode   groupMode
-	showDetails bool
-	filtering   bool
-	filterQuery string
-	statusMu    sync.RWMutex
-	statusLine  string
-	statusUntil time.Time
+	cluster            *Cluster
+	paginator          paginator.Model
+	filterInput        textinput.Model
+	height             int
+	width              int
+	podSorter          func(lhs, rhs *Pod) bool
+	podSort            string
+	style              *Style
+	resources          []v1.ResourceName
+	contextName        string
+	namespace          string
+	groupMode          groupMode
+	showDetails        bool
+	filtering          bool
+	filterQuery        string
+	kubeconfig         string
+	kubeContext        string
+	selectedPod        objectKey
+	hasSelectedPod     bool
+	selectionPinned    bool
+	actionMenuOpen     bool
+	actionMenuIndex    int
+	confirmActionOpen  bool
+	confirmAction      podActionKind
+	confirmActionIndex int
+	containerMenuOpen  bool
+	containerMenuIndex int
+	pendingAction      podActionKind
+	viewerOpen         bool
+	viewerLoading      bool
+	viewerTitle        string
+	viewerBody         string
+	viewerScroll       int
+	statusMu           sync.RWMutex
+	statusLine         string
+	statusUntil        time.Time
 }
 
 func NewPodsUIModel(podSort string, style *Style) *PodsUIModel {
@@ -130,6 +148,8 @@ func NewPodsUIModel(podSort string, style *Style) *PodsUIModel {
 		filterInput: filterInput,
 		style:       style,
 		groupMode:   groupModeNamespace,
+		width:       120,
+		height:      32,
 	}
 	m.SetResources([]string{string(v1.ResourceCPU)})
 	m.setPodSorter(podSort)
@@ -153,43 +173,37 @@ func (u *PodsUIModel) Init() tea.Cmd {
 }
 
 func (u *PodsUIModel) View() string {
-	stats := u.cluster.Stats()
-	visiblePods := u.cluster.VisiblePods()
-	sort.Slice(visiblePods, func(a, b int) bool {
-		return u.podSorter(visiblePods[a], visiblePods[b])
-	})
+	if u.viewerOpen {
+		return u.renderViewer()
+	}
 
-	filteredPods := u.filterPods(visiblePods)
-	nodeAliases := buildNodeAliases(stats.Nodes, visiblePods)
+	stats := u.cluster.Stats()
+	state := u.buildPodListState()
 
 	var b strings.Builder
-	header := u.renderHeader(stats, visiblePods, filteredPods)
+	header := u.renderHeader(stats, state.visiblePods, state.filteredPods)
 	if header != "" {
 		b.WriteString(header)
 		b.WriteByte('\n')
 	}
 
-	if len(filteredPods) == 0 {
+	if len(state.filteredPods) == 0 {
 		if strings.TrimSpace(u.filterQuery) != "" {
 			fmt.Fprintf(&b, "No pods match %q.\n", u.filterQuery)
 		} else {
-			fmt.Fprintln(&b, "Waiting for update or no pods found...")
+			fmt.Fprintln(&b, "No live pods found yet.")
+			fmt.Fprintln(&b, podsMutedStyle("Selection and pod actions become available as soon as pods appear."))
 		}
 	} else {
-		pages := u.paginateGroups(u.groupPods(filteredPods))
-		u.paginator.PerPage = 1
-		u.paginator.SetTotalPages(maxInt(1, len(pages)))
-		if u.paginator.Page >= u.paginator.TotalPages {
-			u.paginator.Page = u.paginator.TotalPages - 1
-		}
-		if len(pages) > 0 && u.paginator.Page >= 0 && u.paginator.Page < len(pages) {
-			u.renderPage(&b, pages[u.paginator.Page], nodeAliases)
+		if len(state.pages) > 0 && u.paginator.Page >= 0 && u.paginator.Page < len(state.pages) {
+			u.renderPage(&b, state.pages[u.paginator.Page], state.selectedPod, state.nodeAliases)
 		}
 	}
 
 	fmt.Fprintln(&b, u.paginator.View())
 	u.writeFooter(&b)
-	return strings.TrimRight(u.combineWithNodeUsagePanel(b.String(), stats.Nodes, visiblePods, filteredPods, nodeAliases), "\n")
+	base := u.combineWithNodeUsagePanel(b.String(), stats.Nodes, state.visiblePods, state.filteredPods, state.nodeAliases)
+	return strings.TrimRight(base+u.renderActionOverlay(state), "\n")
 }
 
 func (u *PodsUIModel) SetTransientStatus(status string, duration time.Duration) {
@@ -325,14 +339,20 @@ func (u *PodsUIModel) renderControlsPanel(filteredPods []*Pod) string {
 		pageLabel = fmt.Sprintf("%d/%d", u.paginator.Page+1, u.paginator.TotalPages)
 	}
 
+	selectedLabel := "none"
+	if u.hasSelectedPod {
+		selectedLabel = fmt.Sprintf("%s/%s", u.selectedPod.namespace, u.selectedPod.name)
+	}
+
 	var b strings.Builder
 	fmt.Fprintln(&b, renderMetaField("Page", pageLabel))
+	fmt.Fprintln(&b, renderMetaField("Selected", selectedLabel))
+	fmt.Fprintln(&b, renderShortcutLine("↑/↓  ←/→  enter", "Navigate + menu"))
 	fmt.Fprintln(&b, renderShortcutLine("c/m/s", "Sort CPU MEM Status"))
 	fmt.Fprintln(&b, renderShortcutLine("g", "Cycle grouping"))
 	fmt.Fprintln(&b, renderShortcutLine("i", "Toggle details"))
 	fmt.Fprintln(&b, renderShortcutLine("/", "Filter pods"))
 	fmt.Fprintln(&b, renderShortcutLine("esc", "Clear filter"))
-	fmt.Fprintln(&b, renderShortcutLine("←/→", "Change page"))
 	fmt.Fprintln(&b, renderShortcutLine("q", "Quit"))
 	if strings.TrimSpace(u.filterQuery) != "" {
 		fmt.Fprintln(&b, renderMetaField("Filter", u.filterQuery))
@@ -340,7 +360,7 @@ func (u *PodsUIModel) renderControlsPanel(filteredPods []*Pod) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func (u *PodsUIModel) renderPage(w io.Writer, page []podGroup, nodeAliases map[string]string) {
+func (u *PodsUIModel) renderPage(w io.Writer, page []podGroup, selectedPod *Pod, nodeAliases map[string]string) {
 	for groupIndex, group := range page {
 		if group.showHeader {
 			fmt.Fprintf(w, "%s %s\n",
@@ -349,7 +369,7 @@ func (u *PodsUIModel) renderPage(w io.Writer, page []podGroup, nodeAliases map[s
 			)
 		}
 		for _, pod := range group.pods {
-			u.renderPod(w, pod, nodeAliases)
+			io.WriteString(w, u.renderPodBlock(pod, pod == selectedPod, nodeAliases))
 		}
 		if groupIndex < len(page)-1 {
 			fmt.Fprintln(w)
@@ -357,7 +377,7 @@ func (u *PodsUIModel) renderPage(w io.Writer, page []podGroup, nodeAliases map[s
 	}
 }
 
-func (u *PodsUIModel) renderPod(w io.Writer, pod *Pod, nodeAliases map[string]string) {
+func (u *PodsUIModel) renderPodBlock(pod *Pod, selected bool, nodeAliases map[string]string) string {
 	health := pod.Health()
 	severity := podAttentionSeverity(pod, u.resources)
 	name := pod.Name()
@@ -382,8 +402,17 @@ func (u *PodsUIModel) renderPod(w io.Writer, pod *Pod, nodeAliases map[string]st
 		extras = append(extras, renderBadge(fmt.Sprintf("%dr", restarts), lipgloss.Color(u.style.yellowHex), lipgloss.Color("#332613"), true))
 	}
 
-	fmt.Fprintf(w, "  %s %s  %s\n",
-		lipgloss.NewStyle().Foreground(u.style.SeverityColor(severity)).Bold(true).Render("▎"),
+	marker := "▎"
+	nameStyle := lipgloss.NewStyle().Foreground(u.style.SeverityColor(severity)).Bold(true)
+	if selected {
+		marker = "▶"
+		nameStyle = nameStyle.Background(lipgloss.Color("#172033")).Padding(0, 1)
+	}
+	name = nameStyle.Render(name)
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "  %s %s  %s\n",
+		lipgloss.NewStyle().Foreground(u.style.SeverityColor(severity)).Bold(true).Render(marker),
 		name,
 		strings.Join(extras, " "),
 	)
@@ -392,20 +421,26 @@ func (u *PodsUIModel) renderPod(w io.Writer, pod *Pod, nodeAliases map[string]st
 	limits := pod.Limits()
 	for _, res := range u.resources {
 		summary := summarizePodUsage(res, usage[res], requested[res], limits)
-		fmt.Fprintf(w, "    %s %s  %s/%s",
+		fmt.Fprintf(&b, "    %s %s  %s/%s",
 			u.resourceLabel(res),
 			u.renderUsageBar(res, summary.pct, u.resourceBarWidth()),
 			formatResourceQuantity(res, usage[res]),
 			summary.baselineLabel,
 		)
 		if u.showDetails {
-			fmt.Fprintf(w, "  %s %s",
+			fmt.Fprintf(&b, "  %s %s",
 				renderBadge(fmt.Sprintf("req %s", summary.requestedLabel), podsSurfaceMuted, podsSurfaceAltBg, false),
 				renderBadge(fmt.Sprintf("lim %s", limitLabelForResource(res, requested[res], limits)), podsSurfaceMuted, podsSurfaceAltBg, false),
 			)
 		}
-		fmt.Fprintln(w)
+		fmt.Fprintln(&b)
 	}
+
+	block := b.String()
+	if selected && (u.actionMenuOpen || u.containerMenuOpen || u.confirmActionOpen) {
+		block = sideBySide(strings.TrimRight(block, "\n"), u.renderActionPopover(pod), 3)
+	}
+	return block
 }
 
 func (u *PodsUIModel) writeFooter(w io.Writer) {
@@ -418,7 +453,7 @@ func (u *PodsUIModel) writeFooter(w io.Writer) {
 		)
 	}
 	u.writeStatusLine(w)
-	fmt.Fprintln(w, podsHelpStyle("page ←/→ • sort c/m/s • group g • info i • filter / • quit q"))
+	fmt.Fprintln(w, podsHelpStyle("nav ↑/↓ ←/→ enter • sort c/m/s • group g • info i • filter / • quit q"))
 }
 
 func (u *PodsUIModel) groupPods(pods []*Pod) []podGroup {
@@ -590,6 +625,18 @@ func (u *PodsUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		u.filterInput.Width = maxInt(24, minInt(72, msg.Width/2))
 		return u, podsTickCmd()
 	case tea.KeyMsg:
+		if u.viewerOpen {
+			return u.handleViewerKey(msg)
+		}
+		if u.confirmActionOpen {
+			return u.handleConfirmActionKey(msg)
+		}
+		if u.containerMenuOpen {
+			return u.handleContainerMenuKey(msg)
+		}
+		if u.actionMenuOpen {
+			return u.handleActionMenuKey(msg)
+		}
 		if u.filtering {
 			return u.handleFilteringKey(msg)
 		}
@@ -601,6 +648,7 @@ func (u *PodsUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if strings.TrimSpace(u.filterQuery) != "" {
 				u.filterQuery = ""
 				u.filterInput.SetValue("")
+				u.resetSelectionAnchor()
 				u.paginator.Page = 0
 				u.SetTransientStatus("Filter cleared.", 2*time.Second)
 				return u, nil
@@ -612,28 +660,52 @@ func (u *PodsUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			u.filterInput.SetValue(u.filterQuery)
 			u.filterInput.CursorEnd()
 			return u, textinput.Blink
+		case "up", "k":
+			u.selectPodByOffset(-1)
+			return u, nil
+		case "down", "j":
+			u.selectPodByOffset(1)
+			return u, nil
+		case "left", "h":
+			if u.selectPage(u.paginator.Page - 1) {
+				return u, nil
+			}
+			return u, nil
+		case "right", "l":
+			if u.selectPage(u.paginator.Page + 1) {
+				return u, nil
+			}
+			return u, nil
+		case "enter":
+			u.openActionMenu()
+			return u, nil
 		case "c":
 			u.setPodSorter("cpu=dsc")
+			u.resetSelectionAnchor()
 			u.paginator.Page = 0
 			u.SetTransientStatus("Sorted by CPU.", 2*time.Second)
 			return u, nil
 		case "m":
 			u.setPodSorter("memory=dsc")
+			u.resetSelectionAnchor()
 			u.paginator.Page = 0
 			u.SetTransientStatus("Sorted by memory.", 2*time.Second)
 			return u, nil
 		case "s":
 			u.setPodSorter("status=dsc")
+			u.resetSelectionAnchor()
 			u.paginator.Page = 0
 			u.SetTransientStatus("Sorted by status.", 2*time.Second)
 			return u, nil
 		case "g":
 			u.groupMode = u.groupMode.next()
+			u.resetSelectionAnchor()
 			u.paginator.Page = 0
 			u.SetTransientStatus(fmt.Sprintf("Grouping by %s.", u.groupModeLabel()), 2*time.Second)
 			return u, nil
 		case "i":
 			u.showDetails = !u.showDetails
+			u.resetSelectionAnchor()
 			u.paginator.Page = 0
 			if u.showDetails {
 				u.SetTransientStatus("Detailed info enabled.", 2*time.Second)
@@ -644,11 +716,36 @@ func (u *PodsUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case podsTickMsg:
 		return u, podsTickCmd()
+	case podActionOutputMsg:
+		u.viewerLoading = false
+		if msg.err != nil {
+			if strings.TrimSpace(msg.body) == "" {
+				u.viewerBody = fmt.Sprintf("Command failed: %v", msg.err)
+			} else {
+				u.viewerBody = fmt.Sprintf("Command failed: %v\n\n%s", msg.err, msg.body)
+			}
+		} else {
+			u.viewerBody = msg.body
+		}
+		u.viewerTitle = msg.title
+		u.viewerScroll = 0
+		return u, nil
+	case podExecFinishedMsg:
+		if msg.err != nil {
+			u.SetTransientStatus(fmt.Sprintf("Exec session ended: %v", msg.err), 4*time.Second)
+		} else {
+			u.SetTransientStatus("Exec session closed.", 2*time.Second)
+		}
+		return u, nil
+	case podMutationMsg:
+		if msg.err != nil {
+			u.SetTransientStatus(msg.err.Error(), 6*time.Second)
+		} else if strings.TrimSpace(msg.status) != "" {
+			u.SetTransientStatus(msg.status, 4*time.Second)
+		}
+		return u, nil
 	}
-
-	var cmd tea.Cmd
-	u.paginator, cmd = u.paginator.Update(msg)
-	return u, cmd
+	return u, nil
 }
 
 func (u *PodsUIModel) handleFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -659,6 +756,7 @@ func (u *PodsUIModel) handleFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		u.filtering = false
 		u.filterInput.Blur()
 		u.filterQuery = strings.TrimSpace(u.filterInput.Value())
+		u.resetSelectionAnchor()
 		u.paginator.Page = 0
 		return u, nil
 	}
@@ -666,6 +764,7 @@ func (u *PodsUIModel) handleFilteringKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	u.filterInput, cmd = u.filterInput.Update(msg)
 	u.filterQuery = strings.TrimSpace(u.filterInput.Value())
+	u.resetSelectionAnchor()
 	u.paginator.Page = 0
 	return u, cmd
 }
@@ -1006,8 +1105,9 @@ func (u *PodsUIModel) linesPerPod() int {
 }
 
 func (u *PodsUIModel) availablePodLines() int {
-	if u.height <= 0 {
-		return 0
+	height := u.height
+	if height <= 0 {
+		height = 32
 	}
 
 	footerLines := 2
@@ -1019,7 +1119,7 @@ func (u *PodsUIModel) availablePodLines() int {
 	}
 
 	headerLines := renderedLineCount(u.renderHeader(u.cluster.Stats(), u.cluster.VisiblePods(), u.filterPods(u.cluster.VisiblePods())))
-	lines := u.height - headerLines - footerLines
+	lines := height - headerLines - footerLines
 	if lines < u.linesPerPod() {
 		return u.linesPerPod()
 	}

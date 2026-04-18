@@ -89,6 +89,18 @@ func (p *Pod) Name() string {
 	return p.pod.Name
 }
 
+// Containers returns the regular container names in spec order.
+func (p *Pod) Containers() []string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	containers := make([]string, 0, len(p.pod.Spec.Containers))
+	for _, container := range p.pod.Spec.Containers {
+		containers = append(containers, container.Name)
+	}
+	return containers
+}
+
 // FullName returns namespace/name.
 func (p *Pod) FullName() string {
 	p.mu.RLock()
