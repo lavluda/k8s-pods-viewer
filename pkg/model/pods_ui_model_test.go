@@ -285,6 +285,62 @@ func TestPodsUIModelDownMovesSelection(t *testing.T) {
 	}
 }
 
+func TestPodsUIModelKeyboardPauseFreezesAutoSortOrder(t *testing.T) {
+	style, err := ParseStyle("#04B575,#FFFF00,#FF0000")
+	if err != nil {
+		t.Fatalf("ParseStyle() error = %v", err)
+	}
+
+	uiModel := NewPodsUIModel("cpu=dsc", style)
+	uiModel.width = 120
+
+	node := NewNode(&v1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "node-a"},
+		Status: v1.NodeStatus{
+			Allocatable: v1.ResourceList{v1.ResourceCPU: resource.MustParse("2")},
+		},
+	})
+	node.Show()
+	uiModel.Cluster().AddNode(node)
+
+	addTestSelectionPod(uiModel, "default", "api-0")
+	addTestSelectionPod(uiModel, "default", "worker-0")
+
+	apiPod, ok := uiModel.Cluster().GetPod("default", "api-0")
+	if !ok {
+		t.Fatal("missing api pod")
+	}
+	workerPod, ok := uiModel.Cluster().GetPod("default", "worker-0")
+	if !ok {
+		t.Fatal("missing worker pod")
+	}
+	apiPod.SetUsage(v1.ResourceList{v1.ResourceCPU: resource.MustParse("500m")})
+	workerPod.SetUsage(v1.ResourceList{v1.ResourceCPU: resource.MustParse("100m")})
+
+	state := uiModel.buildPodListState()
+	if got, want := state.renderedPods[0].Name(), "api-0"; got != want {
+		t.Fatalf("first pod before keyboard pause = %q, want %q", got, want)
+	}
+
+	uiModel.Update(tea.KeyMsg{Type: tea.KeyDown})
+	apiPod.SetUsage(v1.ResourceList{v1.ResourceCPU: resource.MustParse("50m")})
+	workerPod.SetUsage(v1.ResourceList{v1.ResourceCPU: resource.MustParse("900m")})
+
+	state = uiModel.buildPodListState()
+	if got, want := state.renderedPods[0].Name(), "api-0"; got != want {
+		t.Fatalf("first pod during keyboard pause = %q, want %q", got, want)
+	}
+	if got, want := state.renderedPods[1].Name(), "worker-0"; got != want {
+		t.Fatalf("second pod during keyboard pause = %q, want %q", got, want)
+	}
+
+	uiModel.autoSortPausedUntil = time.Now().Add(-time.Second)
+	state = uiModel.buildPodListState()
+	if got, want := state.renderedPods[0].Name(), "worker-0"; got != want {
+		t.Fatalf("first pod after keyboard pause expires = %q, want %q", got, want)
+	}
+}
+
 func TestPodsUIModelEnterUsesMovedSelection(t *testing.T) {
 	uiModel := newPodsUIModelForSelectionTest(t)
 

@@ -125,10 +125,7 @@ func (u *PodsUIModel) SetKubectlConfig(kubeconfig string, kubeContext string) {
 
 func (u *PodsUIModel) buildPodListState() podListState {
 	state := podListState{}
-	state.visiblePods = u.cluster.VisiblePods()
-	sort.Slice(state.visiblePods, func(a, b int) bool {
-		return u.podSorter(state.visiblePods[a], state.visiblePods[b])
-	})
+	state.visiblePods = u.orderedVisiblePods()
 	state.filteredPods = u.filterPods(state.visiblePods)
 	state.nodeAliases = buildNodeAliases(u.cluster.Stats().Nodes, state.visiblePods)
 	groups := u.groupPods(state.filteredPods)
@@ -192,6 +189,71 @@ func (u *PodsUIModel) setSelectedPod(pod *Pod) {
 	}
 	u.selectedPod = objectKey{namespace: pod.Namespace(), name: pod.Name()}
 	u.hasSelectedPod = true
+}
+
+func (u *PodsUIModel) orderedVisiblePods() []*Pod {
+	pods := u.cluster.VisiblePods()
+	if !u.autoSortPaused() {
+		sort.Slice(pods, func(a, b int) bool {
+			return u.podSorter(pods[a], pods[b])
+		})
+		u.rememberPodOrder(pods)
+		return pods
+	}
+
+	if len(u.podOrder) == 0 {
+		sort.Slice(pods, func(a, b int) bool {
+			return u.podSorter(pods[a], pods[b])
+		})
+		u.rememberPodOrder(pods)
+		return pods
+	}
+
+	return u.applyRememberedPodOrder(pods)
+}
+
+func (u *PodsUIModel) autoSortPaused() bool {
+	return time.Now().Before(u.autoSortPausedUntil)
+}
+
+func (u *PodsUIModel) pauseAutoSortForKeyboard() {
+	u.autoSortPausedUntil = time.Now().Add(podAutoSortKeyboardPause)
+}
+
+func (u *PodsUIModel) rememberPodOrder(pods []*Pod) {
+	u.podOrder = u.podOrder[:0]
+	for _, pod := range pods {
+		u.podOrder = append(u.podOrder, objectKey{namespace: pod.Namespace(), name: pod.Name()})
+	}
+}
+
+func (u *PodsUIModel) applyRememberedPodOrder(pods []*Pod) []*Pod {
+	remaining := make(map[objectKey]*Pod, len(pods))
+	for _, pod := range pods {
+		remaining[objectKey{namespace: pod.Namespace(), name: pod.Name()}] = pod
+	}
+
+	ordered := make([]*Pod, 0, len(pods))
+	for _, key := range u.podOrder {
+		if pod, ok := remaining[key]; ok {
+			ordered = append(ordered, pod)
+			delete(remaining, key)
+		}
+	}
+
+	if len(remaining) > 0 {
+		newPods := make([]*Pod, 0, len(remaining))
+		for _, pod := range remaining {
+			newPods = append(newPods, pod)
+		}
+		sort.Slice(newPods, func(a, b int) bool {
+			return u.podSorter(newPods[a], newPods[b])
+		})
+		ordered = append(ordered, newPods...)
+	}
+
+	u.rememberPodOrder(ordered)
+	return ordered
 }
 
 func (u *PodsUIModel) pageForSelection(state podListState) int {

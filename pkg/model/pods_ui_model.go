@@ -59,6 +59,11 @@ const (
 	groupModeFlat      groupMode = "flat"
 )
 
+const (
+	podsTickInterval         = 2 * time.Second
+	podAutoSortKeyboardPause = 30 * time.Second
+)
+
 type podGroup struct {
 	key        string
 	label      string
@@ -92,42 +97,44 @@ type nodeUsageRow struct {
 }
 
 type PodsUIModel struct {
-	cluster            *Cluster
-	paginator          paginator.Model
-	filterInput        textinput.Model
-	height             int
-	width              int
-	podSorter          func(lhs, rhs *Pod) bool
-	podSort            string
-	style              *Style
-	resources          []v1.ResourceName
-	contextName        string
-	namespace          string
-	groupMode          groupMode
-	showDetails        bool
-	filtering          bool
-	filterQuery        string
-	kubeconfig         string
-	kubeContext        string
-	selectedPod        objectKey
-	hasSelectedPod     bool
-	selectionPinned    bool
-	actionMenuOpen     bool
-	actionMenuIndex    int
-	confirmActionOpen  bool
-	confirmAction      podActionKind
-	confirmActionIndex int
-	containerMenuOpen  bool
-	containerMenuIndex int
-	pendingAction      podActionKind
-	viewerOpen         bool
-	viewerLoading      bool
-	viewerTitle        string
-	viewerBody         string
-	viewerScroll       int
-	statusMu           sync.RWMutex
-	statusLine         string
-	statusUntil        time.Time
+	cluster             *Cluster
+	paginator           paginator.Model
+	filterInput         textinput.Model
+	height              int
+	width               int
+	podSorter           func(lhs, rhs *Pod) bool
+	podSort             string
+	podOrder            []objectKey
+	autoSortPausedUntil time.Time
+	style               *Style
+	resources           []v1.ResourceName
+	contextName         string
+	namespace           string
+	groupMode           groupMode
+	showDetails         bool
+	filtering           bool
+	filterQuery         string
+	kubeconfig          string
+	kubeContext         string
+	selectedPod         objectKey
+	hasSelectedPod      bool
+	selectionPinned     bool
+	actionMenuOpen      bool
+	actionMenuIndex     int
+	confirmActionOpen   bool
+	confirmAction       podActionKind
+	confirmActionIndex  int
+	containerMenuOpen   bool
+	containerMenuIndex  int
+	pendingAction       podActionKind
+	viewerOpen          bool
+	viewerLoading       bool
+	viewerTitle         string
+	viewerBody          string
+	viewerScroll        int
+	statusMu            sync.RWMutex
+	statusLine          string
+	statusUntil         time.Time
 }
 
 func NewPodsUIModel(podSort string, style *Style) *PodsUIModel {
@@ -612,7 +619,7 @@ func podMatchesFilter(pod *Pod, query string) bool {
 type podsTickMsg time.Time
 
 func podsTickCmd() tea.Cmd {
-	return tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
+	return tea.Tick(podsTickInterval, func(t time.Time) tea.Msg {
 		return podsTickMsg(t)
 	})
 }
@@ -625,6 +632,7 @@ func (u *PodsUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		u.filterInput.Width = maxInt(24, minInt(72, msg.Width/2))
 		return u, podsTickCmd()
 	case tea.KeyMsg:
+		u.pauseAutoSortForKeyboard()
 		if u.viewerOpen {
 			return u.handleViewerKey(msg)
 		}
@@ -1132,6 +1140,7 @@ func (u *PodsUIModel) setPodSorter(podSort string) {
 		u.podSort = "cpu=dsc"
 	}
 	u.podSorter = makePodSorter(u.podSort)
+	u.podOrder = nil
 }
 
 func (u *PodsUIModel) sortLabel() string {
