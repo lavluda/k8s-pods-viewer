@@ -14,6 +14,8 @@ It is designed for the common questions behind noisy clusters: which pods are us
 brew install lavluda/tap/k8s-pods-viewer
 ```
 
+Latest release notes: [v1.3.1](docs/releases/v1.3.1.md).
+
 ## Preview
 
 ![k8s-pods-viewer dashboard](docs/assets/k8s-pods-viewer-v1.2.0.png)
@@ -22,6 +24,7 @@ brew install lavluda/tap/k8s-pods-viewer
 
 - A live pod list with separate `cpu` and `memory` bars
 - Keyboard pod selection that follows the exact rendered on-screen order
+- Auto-sorted pod order that stays steady briefly after keyboard input, so rows do not jump while navigating
 - A contextual right-side popup menu for the selected pod
 - Pod actions for `exec`, `logs`, `describe`, `kill pod`, `scale -1`, and `scale +1`
 - Multi-container handling for `exec` and `logs`, with a container picker when needed
@@ -40,7 +43,7 @@ brew install lavluda/tap/k8s-pods-viewer
 - Cluster-level CPU and memory summary at the top
 - Filters for namespace, pod labels, and node labels
 
-By default the screen refreshes every `1s`.
+By default the screen refreshes every `2s`.
 
 The viewer runs in the normal terminal screen by default for better compatibility with terminals that clip the first rows in alt-screen mode. If you prefer the alternate screen buffer, use `--alt-screen`.
 
@@ -220,6 +223,8 @@ CLI flags override config file values.
 - `/`: filter pods
 - `esc`: clear filter, close a popup, or back out of confirmation
 - `q`: quit
+
+When the pod list is sorted by changing live data such as CPU or memory, keyboard input briefly pauses automatic reordering. New pods are still shown, but existing rows stay in their current order long enough to move, inspect, and open actions without the selection jumping underneath you.
 
 ## Pod Actions
 
