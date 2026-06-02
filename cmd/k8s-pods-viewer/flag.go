@@ -49,6 +49,9 @@ type Flags struct {
 	Namespace       string
 	PodSort         string
 	Style           string
+	Accent          string
+	Density         string
+	BarStyle        string
 	Resources       string
 	AltScreen       bool
 	ShowAttribution bool
@@ -90,6 +93,15 @@ func ParseFlags() (Flags, error) {
 
 	styleDefault := cfg.getValue("style", "#04B575,#FFFF00,#FF0000")
 	flagSet.StringVar(&flags.Style, "style", styleDefault, "Three colors for styling 'good','ok' and 'bad' values")
+
+	accentDefault := cfg.getValue("accent", "#39D353")
+	flagSet.StringVar(&flags.Accent, "accent", accentDefault, "Accent color (#RRGGBB) used for panels, selection, and the active key marker")
+
+	densityDefault := cfg.getValue("density", "comfortable")
+	flagSet.StringVar(&flags.Density, "density", densityDefault, "Row density: comfortable or compact")
+
+	barStyleDefault := cfg.getValue("bar-style", "segmented")
+	flagSet.StringVar(&flags.BarStyle, "bar-style", barStyleDefault, "Bar style: segmented, solid, or gradient")
 
 	altScreenDefault := cfg.getBool("alt-screen", false)
 	flagSet.BoolVar(&flags.AltScreen, "alt-screen", altScreenDefault, "Run in the terminal alternate screen buffer")

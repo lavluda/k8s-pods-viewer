@@ -36,6 +36,15 @@ func prepareRuntimeConfig(flags Flags) (*runtimeConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("creating style: %w", err)
 	}
+	if err := style.SetAccent(flags.Accent); err != nil {
+		return nil, fmt.Errorf("setting accent: %w", err)
+	}
+	if err := style.SetDensity(flags.Density); err != nil {
+		return nil, fmt.Errorf("setting density: %w", err)
+	}
+	if err := style.SetBarStyle(flags.BarStyle); err != nil {
+		return nil, fmt.Errorf("setting bar style: %w", err)
+	}
 
 	nodeSelector, err := labels.Parse(flags.NodeSelector)
 	if err != nil {

@@ -75,3 +75,33 @@ func TestPrepareRuntimeConfigInvalidPodSelector(t *testing.T) {
 		t.Fatalf("prepareRuntimeConfig() error = nil, want non-nil")
 	}
 }
+
+func TestPrepareRuntimeConfigRejectsInvalidAccent(t *testing.T) {
+	_, err := prepareRuntimeConfig(Flags{
+		Style:  "#04B575,#FFFF00,#FF0000",
+		Accent: "not-a-color",
+	})
+	if err == nil {
+		t.Fatalf("prepareRuntimeConfig() with bad accent error = nil, want non-nil")
+	}
+}
+
+func TestPrepareRuntimeConfigRejectsInvalidDensity(t *testing.T) {
+	_, err := prepareRuntimeConfig(Flags{
+		Style:   "#04B575,#FFFF00,#FF0000",
+		Density: "spacious",
+	})
+	if err == nil {
+		t.Fatalf("prepareRuntimeConfig() with bad density error = nil, want non-nil")
+	}
+}
+
+func TestPrepareRuntimeConfigRejectsInvalidBarStyle(t *testing.T) {
+	_, err := prepareRuntimeConfig(Flags{
+		Style:    "#04B575,#FFFF00,#FF0000",
+		BarStyle: "neon",
+	})
+	if err == nil {
+		t.Fatalf("prepareRuntimeConfig() with bad bar-style error = nil, want non-nil")
+	}
+}
