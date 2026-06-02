@@ -15,6 +15,7 @@ limitations under the License.
 package model
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"testing"
@@ -252,8 +253,11 @@ func TestPodsUIModelViewHighlightsSelectedPod(t *testing.T) {
 	uiModel := newPodsUIModelForSelectionTest(t)
 
 	got := uiModel.View()
-	if !strings.Contains(got, "▶") || !strings.Contains(got, "api-0") {
+	if !strings.Contains(got, "▌") || !strings.Contains(got, "api-0") {
 		t.Fatalf("View() missing selected pod marker, got %q", got)
+	}
+	if !uiModel.hasSelectedPod || uiModel.selectedPod.name != "api-0" {
+		t.Fatalf("selection state = %+v, want api-0", uiModel.selectedPod)
 	}
 }
 
@@ -263,7 +267,7 @@ func TestPodsUIModelEnterOpensActionMenu(t *testing.T) {
 	uiModel.Update(tea.KeyMsg{Type: tea.KeyEnter})
 
 	got := uiModel.View()
-	if !strings.Contains(got, "Pod Actions") {
+	if !strings.Contains(got, "POD ACTIONS") {
 		t.Fatalf("View() missing action menu, got %q", got)
 	}
 	if !strings.Contains(got, "Exec") || !strings.Contains(got, "Logs") || !strings.Contains(got, "Describe") {
@@ -276,11 +280,11 @@ func TestPodsUIModelDownMovesSelection(t *testing.T) {
 
 	uiModel.Update(tea.KeyMsg{Type: tea.KeyDown})
 
-	got := uiModel.View()
-	if !strings.Contains(got, "Selected: default/worker-0") {
-		t.Fatalf("View() missing updated selected pod, got %q", got)
+	if !uiModel.hasSelectedPod || uiModel.selectedPod.name != "worker-0" {
+		t.Fatalf("selection state after Down = %+v, want worker-0", uiModel.selectedPod)
 	}
-	if !strings.Contains(got, "▶") || !strings.Contains(got, "worker-0") {
+	got := uiModel.View()
+	if !strings.Contains(got, "▌") || !strings.Contains(got, "worker-0") {
 		t.Fatalf("View() missing moved selection marker, got %q", got)
 	}
 }
@@ -398,9 +402,8 @@ func TestPodsUIModelSelectionFollowsRenderedGroupedOrder(t *testing.T) {
 
 	uiModel.Update(tea.KeyMsg{Type: tea.KeyDown})
 
-	got := uiModel.View()
-	if !strings.Contains(got, "Selected: alpha/api-2") {
-		t.Fatalf("selection did not follow rendered grouped order, got %q", got)
+	if !uiModel.hasSelectedPod || uiModel.selectedPod.namespace != "alpha" || uiModel.selectedPod.name != "api-2" {
+		t.Fatalf("selection did not follow rendered grouped order, got %+v", uiModel.selectedPod)
 	}
 }
 
@@ -411,6 +414,7 @@ func TestPodsUIModelLogsActionPromptsForContainerWhenMultipleContainers(t *testi
 	}
 
 	uiModel := NewPodsUIModel("cpu=dsc", style)
+	uiModel.width = 160
 	pod := NewPod(&v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -431,7 +435,7 @@ func TestPodsUIModelLogsActionPromptsForContainerWhenMultipleContainers(t *testi
 	uiModel.Update(tea.KeyMsg{Type: tea.KeyEnter})
 
 	got := uiModel.View()
-	if !strings.Contains(got, "Container For Logs") {
+	if !strings.Contains(got, "CONTAINER FOR LOGS") {
 		t.Fatalf("View() missing container selection overlay, got %q", got)
 	}
 	if !strings.Contains(got, "app") || !strings.Contains(got, "sidecar") {
@@ -445,7 +449,10 @@ func TestPodsUIModelActionMenuShowsScalingForDeployments(t *testing.T) {
 		t.Fatalf("ParseStyle() error = %v", err)
 	}
 
-	uiModel := NewPodsUIModel("cpu=dsc", style)
+	// name=asc ensures api-0 ('a') sorts before filler-X ('f') so it is the
+	// selected pod when Enter is pressed.
+	uiModel := NewPodsUIModel("name=asc", style)
+	uiModel.width = 160
 	pod := NewPod(&v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -462,6 +469,8 @@ func TestPodsUIModelActionMenuShowsScalingForDeployments(t *testing.T) {
 		Status: v1.PodStatus{Phase: v1.PodRunning},
 	})
 	uiModel.Cluster().AddPod(pod)
+	// Filler inflates the background so the full popup is not clipped.
+	addFillerBackgroundForPopupTest(t, uiModel)
 
 	uiModel.Update(tea.KeyMsg{Type: tea.KeyEnter})
 
@@ -514,7 +523,8 @@ func TestPodsUIModelKillActionRequiresConfirmation(t *testing.T) {
 		t.Fatalf("ParseStyle() error = %v", err)
 	}
 
-	uiModel := NewPodsUIModel("cpu=dsc", style)
+	uiModel := NewPodsUIModel("name=asc", style)
+	uiModel.width = 160
 	pod := NewPod(&v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -526,6 +536,7 @@ func TestPodsUIModelKillActionRequiresConfirmation(t *testing.T) {
 		Status: v1.PodStatus{Phase: v1.PodRunning},
 	})
 	uiModel.Cluster().AddPod(pod)
+	addFillerBackgroundForPopupTest(t, uiModel)
 
 	uiModel.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	uiModel.Update(tea.KeyMsg{Type: tea.KeyDown})
@@ -534,7 +545,7 @@ func TestPodsUIModelKillActionRequiresConfirmation(t *testing.T) {
 	uiModel.Update(tea.KeyMsg{Type: tea.KeyEnter})
 
 	got := uiModel.View()
-	if !strings.Contains(got, "Confirm Action") {
+	if !strings.Contains(got, "CONFIRM ACTION") {
 		t.Fatalf("View() missing confirmation state, got %q", got)
 	}
 	if !strings.Contains(got, "Delete this pod now?") {
@@ -607,20 +618,21 @@ func TestPodsUIModelInitialLoadStaysOnFirstPage(t *testing.T) {
 	uiModel.Cluster().AddNode(node)
 
 	addTestSelectionPod(uiModel, "default", "z-last")
-	if got := uiModel.View(); !strings.Contains(got, "Selected: default/z-last") {
-		t.Fatalf("initial selection missing, got %q", got)
+	uiModel.View()
+	if !uiModel.hasSelectedPod || uiModel.selectedPod.name != "z-last" {
+		t.Fatalf("initial selection missing, got %+v", uiModel.selectedPod)
 	}
 
 	for index := 0; index < 16; index++ {
 		addTestSelectionPod(uiModel, "default", "a-pod-"+strconv.Itoa(index))
 	}
 
-	got := uiModel.View()
-	if !strings.Contains(got, "Selected: default/a-pod-0") {
-		t.Fatalf("View() did not re-anchor to the first rendered pod, got %q", got)
+	uiModel.View()
+	if !uiModel.hasSelectedPod || uiModel.selectedPod.name != "a-pod-0" {
+		t.Fatalf("View() did not re-anchor to the first rendered pod, got %+v", uiModel.selectedPod)
 	}
-	if !strings.Contains(got, "Page: 1/") {
-		t.Fatalf("View() did not stay on the first page, got %q", got)
+	if uiModel.paginator.Page != 0 {
+		t.Fatalf("View() did not stay on the first page, got page %d", uiModel.paginator.Page)
 	}
 }
 
@@ -633,7 +645,8 @@ func newPodsUIModelForSelectionTest(t *testing.T) *PodsUIModel {
 	}
 
 	uiModel := NewPodsUIModel("name=asc", style)
-	uiModel.width = 120
+	// Use a wide terminal so the right-column popup path is active.
+	uiModel.width = 160
 
 	node := NewNode(&v1.Node{
 		ObjectMeta: metav1.ObjectMeta{Name: "node-a"},
@@ -674,4 +687,35 @@ func addTestSelectionPod(uiModel *PodsUIModel, namespace string, name string) {
 
 func boolPtr(v bool) *bool {
 	return &v
+}
+
+// addFillerBackgroundForPopupTest adds a node and several simple filler pods so
+// the sideBySideFixed combined body is tall enough that the 18-line floating
+// action popup is not clipped by the overlayAt boundary guard.  Tests that
+// assert on popup content (Kill Pod, Scale, Confirm buttons) must call this.
+func addFillerBackgroundForPopupTest(t *testing.T, uiModel *PodsUIModel) {
+	t.Helper()
+	node := NewNode(&v1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "node-a"},
+		Status: v1.NodeStatus{
+			Allocatable: v1.ResourceList{v1.ResourceCPU: resource.MustParse("4")},
+		},
+	})
+	node.Show()
+	uiModel.Cluster().AddNode(node)
+
+	for i := 0; i < 6; i++ {
+		p := NewPod(&v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "filler",
+				Name:      fmt.Sprintf("filler-%d", i),
+			},
+			Spec: v1.PodSpec{
+				NodeName:   "node-a",
+				Containers: []v1.Container{{Name: "app"}},
+			},
+			Status: v1.PodStatus{Phase: v1.PodRunning},
+		})
+		uiModel.Cluster().AddPod(p)
+	}
 }
