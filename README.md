@@ -18,7 +18,7 @@ Latest release notes: [v1.4.0](docs/releases/v1.4.0.md).
 
 ## Preview
 
-![k8s-pods-viewer dashboard](docs/assets/k8s-pods-viewer-v1.2.0.png)
+![k8s-pods-viewer dashboard](docs/assets/k8s-pods-viewer-v1.4.0.png)
 
 ## What It Shows
 
