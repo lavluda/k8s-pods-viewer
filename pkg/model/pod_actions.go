@@ -731,27 +731,30 @@ func (u *PodsUIModel) renderActionOverlay(state podListState) string {
 	return ""
 }
 
-func (u *PodsUIModel) renderActionPopover(pod *Pod) string {
+// renderActionPopover renders the action panel at the given width.  When width
+// is 0 the function picks a sensible default.  The panel is rendered as a full
+// bordered panel (no inline sideBySide placement) so it can be used in the
+// right column without affecting the pod list height.
+func (u *PodsUIModel) renderActionPopover(pod *Pod, width int) string {
 	options := displayedPodActionOptions(pod)
-	lines := []string{
-		lipgloss.NewStyle().Foreground(podsSurfaceMuted).Render("Selected pod"),
-		lipgloss.NewStyle().Foreground(podsSurfaceText).Bold(true).Render(truncateRunes(pod.FullName(), 30)),
-		"",
-	}
 
-	title := "Pod Actions"
+	podLabel := lipgloss.NewStyle().Foreground(podsSurfaceMuted).Render("Selected pod")
+	podName := lipgloss.NewStyle().Foreground(podsSurfaceText).Bold(true).Render(truncateRunes(pod.FullName(), 36))
+	lines := []string{podLabel, podName, ""}
+
+	title := "POD ACTIONS"
 	if u.confirmActionOpen {
-		title = "Confirm Action"
+		title = "CONFIRM ACTION"
 		lines = append(lines, u.renderConfirmMessage(pod)...)
 		lines = append(lines, "")
 		lines = append(lines, u.renderConfirmButtons())
 	} else if u.containerMenuOpen {
-		title = fmt.Sprintf("Container For %s", u.pendingAction.label())
+		title = "CONTAINER FOR " + strings.ToUpper(u.pendingAction.label())
 		for index, container := range pod.Containers() {
 			lines = append(lines, u.renderPopoverItem(container, index == u.containerMenuIndex, ""))
 		}
 		lines = append(lines, "")
-		lines = append(lines, podsHelpStyle("enter choose • esc back"))
+		lines = append(lines, podsHelpStyle("enter choose  •  esc back"))
 	} else {
 		inspect := filterPodActions(options, func(action podActionKind) bool {
 			return action == podActionExec || action == podActionLogs || action == podActionDescribe
@@ -770,42 +773,15 @@ func (u *PodsUIModel) renderActionPopover(pod *Pod) string {
 		lines = append(lines, "")
 		lines = append(lines, u.renderActionSection("Danger", danger, len(options)-len(danger), true)...)
 		lines = append(lines, "")
-		lines = append(lines, podsHelpStyle("enter choose • esc close"))
+		lines = append(lines, podsHelpStyle("enter choose  •  esc close"))
 	}
 
-	width := 34
-	if leftWidth := u.leftPaneWidth(); leftWidth > 0 {
-		width = minInt(38, maxInt(30, leftWidth/3))
+	if width <= 0 {
+		width = 36
 	}
-
-	titleBar := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#DDEAFE")).
-		Background(lipgloss.Color("#14213D")).
-		Bold(true).
-		Padding(0, 1).
-		Render(title)
 
 	content := strings.Join(lines, "\n")
-	box := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#475569")).
-		Background(lipgloss.Color("#0F172A")).
-		Padding(0, 1).
-		Width(width).
-		Render(titleBar + "\n" + content)
-
-	shadow := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#020617")).
-		Render("░")
-	boxLines := strings.Split(box, "\n")
-	for index, line := range boxLines {
-		if index == 0 {
-			continue
-		}
-		boxLines[index] = line + shadow
-	}
-	boxLines = append(boxLines, lipgloss.NewStyle().Foreground(lipgloss.Color("#020617")).Render(strings.Repeat("░", maxInt(0, lipgloss.Width(boxLines[0])-1))))
-	return strings.Join(boxLines, "\n")
+	return renderPanel(width, title, "", content, podsPanelBorderHi)
 }
 
 func filterPodActions(options []podActionKind, include func(action podActionKind) bool) []podActionKind {
@@ -922,14 +898,15 @@ func (u *PodsUIModel) renderPopoverItem(label string, selected bool, hint string
 		Padding(0, 1)
 	if selected {
 		prefix = "› "
+		accentBg := lipgloss.Color("#0E2A18") // a desaturated accent backing
 		rowStyle = rowStyle.
-			Foreground(lipgloss.Color("#F8FAFC")).
-			Background(lipgloss.Color("#1E3A8A")).
+			Foreground(podsSurfaceText).
+			Background(accentBg).
 			Bold(true)
 	}
 
 	if hint != "" {
-		label = fmt.Sprintf("%s%s%s", renderBadge(hint, lipgloss.Color("#93C5FD"), lipgloss.Color("#111827"), true), "  ", label)
+		label = fmt.Sprintf("%s%s%s", renderBadge(hint, podsSurfaceText, podsPanelAltBg, true), "  ", label)
 	}
 	return rowStyle.Render(prefix + label)
 }
