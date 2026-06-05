@@ -20,6 +20,7 @@ import (
 	"time"
 
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -32,15 +33,15 @@ import (
 )
 
 type PodsController struct {
-	kubeClient    *kubernetes.Clientset
-	metricsClient *metricsclientset.Clientset
+	kubeClient    kubernetes.Interface
+	metricsClient metricsclientset.Interface
 	uiModel       *model.PodsUIModel
 	nodeSelector  labels.Selector
 	podSelector   labels.Selector
 	namespace     string
 }
 
-func NewPodsController(kubeClient *kubernetes.Clientset, metricsClient *metricsclientset.Clientset, uiModel *model.PodsUIModel, nodeSelector labels.Selector, podSelector labels.Selector, namespace string) *PodsController {
+func NewPodsController(kubeClient kubernetes.Interface, metricsClient metricsclientset.Interface, uiModel *model.PodsUIModel, nodeSelector labels.Selector, podSelector labels.Selector, namespace string) *PodsController {
 	return &PodsController{
 		kubeClient:    kubeClient,
 		metricsClient: metricsClient,
@@ -53,30 +54,43 @@ func NewPodsController(kubeClient *kubernetes.Clientset, metricsClient *metricsc
 
 func (m PodsController) Start(ctx context.Context) {
 	cluster := m.uiModel.Cluster()
-	m.seedNodes(ctx, cluster)
-	m.seedPods(ctx, cluster)
-	m.startPodWatch(ctx, cluster)
-	m.startNodeWatch(ctx, cluster)
-	m.startPodMetricsPoller(ctx, cluster)
+	if m.seedNodes(ctx, cluster) {
+		if m.canWatchNodes(ctx) {
+			m.startNodeWatch(ctx, cluster)
+		}
+	}
+	if m.seedPods(ctx, cluster) {
+		if m.canWatchPods(ctx) {
+			m.startPodWatch(ctx, cluster)
+		}
+		m.startPodMetricsPoller(ctx, cluster)
+	}
 }
 
-func (m PodsController) seedNodes(ctx context.Context, cluster *model.Cluster) {
+func (m PodsController) seedNodes(ctx context.Context, cluster *model.Cluster) bool {
 	nodeList, err := m.kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{
 		LabelSelector: m.nodeSelector.String(),
 	})
 	if err != nil {
+		if apierrors.IsForbidden(err) {
+			cluster.SetNodeDataAvailable(false)
+			m.uiModel.SetTransientStatus("Node access forbidden; continuing in pod-only mode.", 30*time.Second)
+			return false
+		}
 		m.uiModel.SetTransientStatus(fmt.Sprintf("Initial node fetch failed: %v", err), 12*time.Second)
-		return
+		return true
 	}
 
+	cluster.SetNodeDataAvailable(true)
 	for _, node := range nodeList.Items {
 		nodeCopy := node
 		n := cluster.AddNode(model.NewNode(&nodeCopy))
 		n.Show()
 	}
+	return true
 }
 
-func (m PodsController) seedPods(ctx context.Context, cluster *model.Cluster) {
+func (m PodsController) seedPods(ctx context.Context, cluster *model.Cluster) bool {
 	namespace := m.namespace
 	if namespace == "" {
 		namespace = v1.NamespaceAll
@@ -87,8 +101,16 @@ func (m PodsController) seedPods(ctx context.Context, cluster *model.Cluster) {
 		FieldSelector: fields.Everything().String(),
 	})
 	if err != nil {
+		if apierrors.IsForbidden(err) {
+			scope := fmt.Sprintf("namespace %q", namespace)
+			if namespace == v1.NamespaceAll {
+				scope = "all namespaces"
+			}
+			m.uiModel.SetTransientStatus(fmt.Sprintf("Pod access forbidden for %s; grant list/watch pods or choose an allowed --namespace.", scope), 30*time.Second)
+			return false
+		}
 		m.uiModel.SetTransientStatus(fmt.Sprintf("Initial pod fetch failed: %v", err), 12*time.Second)
-		return
+		return true
 	}
 
 	for _, pod := range podList.Items {
@@ -98,6 +120,42 @@ func (m PodsController) seedPods(ctx context.Context, cluster *model.Cluster) {
 		}
 		cluster.AddPod(model.NewPod(&podCopy))
 	}
+	return true
+}
+
+func (m PodsController) canWatchNodes(ctx context.Context) bool {
+	watcher, err := m.kubeClient.CoreV1().Nodes().Watch(ctx, metav1.ListOptions{
+		LabelSelector: m.nodeSelector.String(),
+	})
+	if err != nil {
+		if apierrors.IsForbidden(err) {
+			m.uiModel.SetTransientStatus("Node watch forbidden; showing the initial node snapshot.", 30*time.Second)
+			return false
+		}
+		return true
+	}
+	watcher.Stop()
+	return true
+}
+
+func (m PodsController) canWatchPods(ctx context.Context) bool {
+	namespace := m.namespace
+	if namespace == "" {
+		namespace = v1.NamespaceAll
+	}
+	watcher, err := m.kubeClient.CoreV1().Pods(namespace).Watch(ctx, metav1.ListOptions{
+		LabelSelector: m.podSelector.String(),
+		FieldSelector: fields.Everything().String(),
+	})
+	if err != nil {
+		if apierrors.IsForbidden(err) {
+			m.uiModel.SetTransientStatus("Pod watch forbidden; showing the initial pod snapshot.", 30*time.Second)
+			return false
+		}
+		return true
+	}
+	watcher.Stop()
+	return true
 }
 
 func (m PodsController) startNodeWatch(ctx context.Context, cluster *model.Cluster) {
@@ -223,6 +281,10 @@ func (m PodsController) startPodMetricsPoller(ctx context.Context, cluster *mode
 		warned := false
 		for {
 			if err := m.refreshPodMetrics(ctx, cluster); err != nil {
+				if apierrors.IsForbidden(err) {
+					m.uiModel.SetTransientStatus("Pod metrics access forbidden; continuing without live usage data.", 30*time.Second)
+					return
+				}
 				if !warned {
 					m.uiModel.SetTransientStatus("Pod metrics unavailable; retrying without live usage data...", 10*time.Second)
 					warned = true

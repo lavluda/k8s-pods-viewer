@@ -21,19 +21,34 @@ import (
 )
 
 type Cluster struct {
-	mu        sync.RWMutex
-	nodes     map[string]*Node
-	pods      map[objectKey]*Pod
-	resources []v1.ResourceName
+	mu                sync.RWMutex
+	nodes             map[string]*Node
+	pods              map[objectKey]*Pod
+	resources         []v1.ResourceName
+	nodeDataAvailable bool
 }
 
 func NewCluster() *Cluster {
 	return &Cluster{
-		nodes:     map[string]*Node{},
-		pods:      map[objectKey]*Pod{},
-		resources: []v1.ResourceName{v1.ResourceCPU},
+		nodes:             map[string]*Node{},
+		pods:              map[objectKey]*Pod{},
+		resources:         []v1.ResourceName{v1.ResourceCPU},
+		nodeDataAvailable: true,
 	}
 }
+
+func (c *Cluster) SetNodeDataAvailable(available bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.nodeDataAvailable = available
+}
+
+func (c *Cluster) NodeDataAvailable() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.nodeDataAvailable
+}
+
 func (c *Cluster) AddNode(node *Node) *Node {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -144,7 +159,7 @@ func (c *Cluster) VisiblePods() []*Pod {
 	defer c.mu.RUnlock()
 	var pods []*Pod
 	for _, p := range c.pods {
-		if p.NodeName() != "" {
+		if c.nodeDataAvailable && p.NodeName() != "" {
 			visible, found := c.visibleNodeForNameLocked(p.NodeName())
 			if !found || !visible {
 				continue
@@ -165,7 +180,7 @@ func (c *Cluster) Stats() Stats {
 	}
 
 	for _, p := range c.pods {
-		if p.NodeName() != "" {
+		if c.nodeDataAvailable && p.NodeName() != "" {
 			visible, found := c.visibleNodeForNameLocked(p.NodeName())
 			if !found || !visible {
 				continue

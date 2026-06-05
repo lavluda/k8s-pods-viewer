@@ -210,3 +210,19 @@ func TestClusterDeleteNodeDeletesPods(t *testing.T) {
 	}
 
 }
+
+func TestClusterShowsScheduledPodsWhenNodeDataUnavailable(t *testing.T) {
+	cluster := model.NewCluster()
+	cluster.SetNodeDataAvailable(false)
+
+	p := testPod("default", "mypod")
+	p.Spec.NodeName = "node-without-read-access"
+	cluster.AddPod(model.NewPod(p))
+
+	if got := len(cluster.VisiblePods()); got != 1 {
+		t.Fatalf("VisiblePods() = %d pods, want 1 in pod-only mode", got)
+	}
+	if got := cluster.Stats().TotalPods; got != 1 {
+		t.Fatalf("Stats().TotalPods = %d, want 1 in pod-only mode", got)
+	}
+}

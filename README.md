@@ -14,7 +14,7 @@ It is designed for the common questions behind noisy clusters: which pods are us
 brew install lavluda/tap/k8s-pods-viewer
 ```
 
-Latest release notes: [v1.4.0](docs/releases/v1.4.0.md).
+Latest release notes: [v1.4.1](docs/releases/v1.4.1.md).
 
 ## Preview
 
@@ -69,11 +69,14 @@ For pods, the baseline is usually the limit when present, and falls back to the 
 ## Requirements
 
 - Access to a Kubernetes cluster via `kubeconfig`
-- Permission to `list/watch` `pods` and `nodes`
-- Permission to read pod metrics from `metrics.k8s.io`
+- Permission to `list/watch` `pods` in the namespace(s) being viewed
+- Optional permission to `list/watch` `nodes` for node pressure and node filtering
+- Optional permission to read pod metrics from `metrics.k8s.io` for live usage
 - A working `metrics.k8s.io` provider, typically Metrics Server
 
-If pod metrics are unavailable, the tool will still connect to the cluster, but live usage bars will not be meaningful until metrics are available.
+Cluster-admin access is not required. If node access is forbidden, the viewer continues
+in pod-only mode. If pod metrics are unavailable, the viewer continues without live
+usage data. See [Least-Privilege RBAC](docs/rbac.md) for namespace-scoped examples.
 
 ## Install
 

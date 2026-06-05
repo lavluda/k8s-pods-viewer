@@ -902,7 +902,7 @@ func (u *PodsUIModel) combineWithNodeUsagePanel(left string, nodes []*Node, pods
 	rightWidth := u.rightPaneWidth()
 	nodeSection := u.renderNodeUsagePanel(nodes, pods, nodeAliases, rightWidth)
 	if strings.TrimSpace(nodeSection) == "" {
-		nodeSection = u.renderNodeUsagePlaceholder(rightWidth)
+		nodeSection = u.renderNodeUsagePlaceholder(rightWidth, u.cluster.NodeDataAvailable())
 	}
 	right := strings.TrimRight(nodeSection+"\n"+u.renderSignalsPanel(nodes, pods, filteredPods, rightWidth), "\n")
 	return sideBySideFixed(left, right, u.leftPaneWidth(), rightWidth, 3)
@@ -1075,8 +1075,12 @@ func (u *PodsUIModel) renderSignalsPanel(_ []*Node, _ []*Pod, filteredPods []*Po
 	return renderPanel(width, "Highlights", "", inner.String(), podsPanelBorder)
 }
 
-func (u *PodsUIModel) renderNodeUsagePlaceholder(width int) string {
-	body := lipgloss.NewStyle().Foreground(podsSurfaceMuted).Render("Waiting for node data…")
+func (u *PodsUIModel) renderNodeUsagePlaceholder(width int, available bool) string {
+	message := "Waiting for node data…"
+	if !available {
+		message = "Node access unavailable; pod-only mode."
+	}
+	body := lipgloss.NewStyle().Foreground(podsSurfaceMuted).Render(message)
 	return renderPanel(width, "Node Pressure", "", body, podsPanelBorder)
 }
 
