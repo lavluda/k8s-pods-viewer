@@ -16,6 +16,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/labels"
@@ -74,4 +75,15 @@ func normalizeNamespace(namespace string) string {
 	default:
 		return strings.TrimSpace(namespace)
 	}
+}
+
+func configureAWSProfile(profile string) error {
+	profile = strings.TrimSpace(profile)
+	if profile == "" {
+		return nil
+	}
+	if err := os.Setenv("AWS_PROFILE", profile); err != nil {
+		return fmt.Errorf("setting AWS_PROFILE: %w", err)
+	}
+	return nil
 }

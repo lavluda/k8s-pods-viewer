@@ -44,6 +44,7 @@ func init() {
 type Flags struct {
 	Context         string
 	Kubeconfig      string
+	AWSProfile      string
 	NodeSelector    string
 	PodSelector     string
 	Namespace       string
@@ -75,6 +76,9 @@ func ParseFlags() (Flags, error) {
 
 	kubeconfigDefault := getStringEnv("KUBECONFIG", cfg.getValue("kubeconfig", filepath.Join(homeDir, ".kube", "config")))
 	flagSet.StringVar(&flags.Kubeconfig, "kubeconfig", kubeconfigDefault, "Absolute path to the kubeconfig file")
+
+	awsProfileDefault := getStringEnv("AWS_PROFILE", cfg.getValue("aws-profile", ""))
+	flagSet.StringVar(&flags.AWSProfile, "aws-profile", awsProfileDefault, "AWS profile to use for EKS authentication")
 
 	nodeSelectorDefault := cfg.getValue("node-selector", "")
 	flagSet.StringVar(&flags.NodeSelector, "node-selector", nodeSelectorDefault, "Node label selector used to filter nodes")

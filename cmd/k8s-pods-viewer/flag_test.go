@@ -73,6 +73,7 @@ func withArgs(t *testing.T, args ...string) {
 func TestParseFlagsDefaults(t *testing.T) {
 	tempDir := withTestConfigPath(t, "")
 	unsetEnv(t, "KUBECONFIG")
+	unsetEnv(t, "AWS_PROFILE")
 	withArgs(t)
 
 	flags, err := ParseFlags()
@@ -82,6 +83,9 @@ func TestParseFlagsDefaults(t *testing.T) {
 
 	if got, want := flags.Kubeconfig, filepath.Join(tempDir, ".kube", "config"); got != want {
 		t.Fatalf("Kubeconfig = %q, want %q", got, want)
+	}
+	if flags.AWSProfile != "" {
+		t.Fatalf("AWSProfile = %q, want empty", flags.AWSProfile)
 	}
 	if got, want := flags.PodSort, "cpu=dsc"; got != want {
 		t.Fatalf("PodSort = %q, want %q", got, want)
@@ -102,6 +106,7 @@ func TestParseFlagsConfigFile(t *testing.T) {
 		"# comment",
 		"context = prod-cluster",
 		"kubeconfig = /tmp/from-config",
+		"aws-profile = alex",
 		"namespace = production",
 		"node-selector = role=worker",
 		"pod-selector = app=api",
@@ -111,6 +116,7 @@ func TestParseFlagsConfigFile(t *testing.T) {
 		"alt-screen = true",
 	}, "\n"))
 	unsetEnv(t, "KUBECONFIG")
+	unsetEnv(t, "AWS_PROFILE")
 	withArgs(t)
 
 	flags, err := ParseFlags()
@@ -123,6 +129,9 @@ func TestParseFlagsConfigFile(t *testing.T) {
 	}
 	if got, want := flags.Kubeconfig, "/tmp/from-config"; got != want {
 		t.Fatalf("Kubeconfig = %q, want %q", got, want)
+	}
+	if got, want := flags.AWSProfile, "alex"; got != want {
+		t.Fatalf("AWSProfile = %q, want %q", got, want)
 	}
 	if got, want := flags.Namespace, "production"; got != want {
 		t.Fatalf("Namespace = %q, want %q", got, want)
@@ -162,10 +171,26 @@ func TestParseFlagsKubeconfigEnvOverridesConfig(t *testing.T) {
 	}
 }
 
+func TestParseFlagsAWSProfileEnvOverridesConfig(t *testing.T) {
+	withTestConfigPath(t, "aws-profile=from-config\n")
+	t.Setenv("AWS_PROFILE", "from-env")
+	withArgs(t)
+
+	flags, err := ParseFlags()
+	if err != nil {
+		t.Fatalf("ParseFlags() error = %v", err)
+	}
+
+	if got, want := flags.AWSProfile, "from-env"; got != want {
+		t.Fatalf("AWSProfile = %q, want %q", got, want)
+	}
+}
+
 func TestParseFlagsCLIOverridesConfigAndEnv(t *testing.T) {
 	withTestConfigPath(t, strings.Join([]string{
 		"context=from-config",
 		"kubeconfig=/tmp/from-config",
+		"aws-profile=from-config",
 		"namespace=from-config",
 		"node-selector=role=worker",
 		"pod-selector=app=api",
@@ -174,9 +199,11 @@ func TestParseFlagsCLIOverridesConfigAndEnv(t *testing.T) {
 		"style=#111111,#222222,#333333",
 	}, "\n"))
 	t.Setenv("KUBECONFIG", "/tmp/from-env")
+	t.Setenv("AWS_PROFILE", "from-env")
 	withArgs(t,
 		"--context", "from-cli",
 		"--kubeconfig", "/tmp/from-cli",
+		"--aws-profile", "alex",
 		"--namespace", "from-cli",
 		"--node-selector", "topology.kubernetes.io/zone=az1",
 		"--pod-selector", "component=web",
@@ -197,6 +224,9 @@ func TestParseFlagsCLIOverridesConfigAndEnv(t *testing.T) {
 	}
 	if got, want := flags.Kubeconfig, "/tmp/from-cli"; got != want {
 		t.Fatalf("Kubeconfig = %q, want %q", got, want)
+	}
+	if got, want := flags.AWSProfile, "alex"; got != want {
+		t.Fatalf("AWSProfile = %q, want %q", got, want)
 	}
 	if got, want := flags.Namespace, "from-cli"; got != want {
 		t.Fatalf("Namespace = %q, want %q", got, want)

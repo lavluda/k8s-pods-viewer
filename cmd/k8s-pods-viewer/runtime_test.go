@@ -15,6 +15,7 @@ limitations under the License.
 package main
 
 import (
+	"os"
 	"testing"
 )
 
@@ -103,5 +104,27 @@ func TestPrepareRuntimeConfigRejectsInvalidBarStyle(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatalf("prepareRuntimeConfig() with bad bar-style error = nil, want non-nil")
+	}
+}
+
+func TestConfigureAWSProfile(t *testing.T) {
+	t.Setenv("AWS_PROFILE", "original")
+
+	if err := configureAWSProfile(" alex "); err != nil {
+		t.Fatalf("configureAWSProfile() error = %v", err)
+	}
+	if got, want := os.Getenv("AWS_PROFILE"), "alex"; got != want {
+		t.Fatalf("AWS_PROFILE = %q, want %q", got, want)
+	}
+}
+
+func TestConfigureAWSProfileEmptyKeepsExistingValue(t *testing.T) {
+	t.Setenv("AWS_PROFILE", "existing")
+
+	if err := configureAWSProfile("  "); err != nil {
+		t.Fatalf("configureAWSProfile() error = %v", err)
+	}
+	if got, want := os.Getenv("AWS_PROFILE"), "existing"; got != want {
+		t.Fatalf("AWS_PROFILE = %q, want %q", got, want)
 	}
 }

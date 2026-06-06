@@ -59,6 +59,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	if err := configureAWSProfile(flags.AWSProfile); err != nil {
+		log.Fatal(err)
+	}
 
 	m := model.NewPodsUIModel(flags.PodSort, runtime.style)
 	m.SetResources(runtime.resources)

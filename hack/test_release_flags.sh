@@ -45,6 +45,7 @@ expect_success "attribution output" go run ./cmd/k8s-pods-viewer -attribution
 expect_success "version with combined parse-only flags" \
   go run ./cmd/k8s-pods-viewer \
   -version \
+  --aws-profile alex \
   --context demo \
   --namespace production \
   --node-selector role=worker \

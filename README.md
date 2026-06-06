@@ -14,7 +14,7 @@ It is designed for the common questions behind noisy clusters: which pods are us
 brew install lavluda/tap/k8s-pods-viewer
 ```
 
-Latest release notes: [v1.4.1](docs/releases/v1.4.1.md).
+Latest release notes: [v1.4.2](docs/releases/v1.4.2.md).
 
 ## Preview
 
@@ -162,6 +162,18 @@ k8s-pods-viewer \
   --context my-cluster
 ```
 
+Use an AWS profile for EKS authentication:
+
+```bash
+k8s-pods-viewer --aws-profile alex
+```
+
+This sets `AWS_PROFILE` for both the Kubernetes client and pod actions that invoke `kubectl`. You can also use the environment variable directly:
+
+```bash
+AWS_PROFILE=alex k8s-pods-viewer
+```
+
 ## Configuration File
 
 The tool reads optional defaults from:
@@ -175,6 +187,7 @@ Format:
 ```ini
 context=my-cluster
 kubeconfig=/Users/you/.kube/config
+aws-profile=alex
 namespace=production
 node-selector=karpenter.sh/nodepool=default
 pod-selector=app=api
@@ -191,6 +204,8 @@ CLI flags override config file values.
 ```text
 -attribution
     Show the Open Source Attribution
+-aws-profile string
+    AWS profile to use for EKS authentication
 -context string
     Name of the kubernetes context to use
 -kubeconfig string
