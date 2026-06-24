@@ -15,6 +15,7 @@ limitations under the License.
 package model
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -31,6 +32,22 @@ type Node struct {
 	node    v1.Node
 	pods    map[objectKey]*Pod
 	used    v1.ResourceList
+}
+
+// NodeDetails contains optional platform and machine metadata exposed by the
+// Kubernetes Node object. Providers do not consistently populate every field.
+type NodeDetails struct {
+	Platform         string
+	InstanceType     string
+	Region           string
+	Zone             string
+	Pool             string
+	CapacityType     string
+	OS               string
+	Architecture     string
+	OSImage          string
+	KubeletVersion   string
+	ContainerRuntime string
 }
 
 func NewNode(n *v1.Node) *Node {
@@ -63,6 +80,71 @@ func (n *Node) ProviderID() string {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 	return n.node.Spec.ProviderID
+}
+
+func (n *Node) Details() NodeDetails {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
+	labels := n.node.Labels
+	details := NodeDetails{
+		Platform:         nodePlatform(labels, n.node.Spec.ProviderID),
+		InstanceType:     firstNonEmpty(labels["node.kubernetes.io/instance-type"], labels["beta.kubernetes.io/instance-type"]),
+		Region:           firstNonEmpty(labels["topology.kubernetes.io/region"], labels["failure-domain.beta.kubernetes.io/region"]),
+		Zone:             firstNonEmpty(labels["topology.kubernetes.io/zone"], labels["failure-domain.beta.kubernetes.io/zone"]),
+		Pool:             nodePool(labels),
+		CapacityType:     nodeCapacityType(labels),
+		OS:               firstNonEmpty(labels["kubernetes.io/os"], labels["beta.kubernetes.io/os"], n.node.Status.NodeInfo.OperatingSystem),
+		Architecture:     firstNonEmpty(labels["kubernetes.io/arch"], labels["beta.kubernetes.io/arch"], n.node.Status.NodeInfo.Architecture),
+		OSImage:          n.node.Status.NodeInfo.OSImage,
+		KubeletVersion:   n.node.Status.NodeInfo.KubeletVersion,
+		ContainerRuntime: n.node.Status.NodeInfo.ContainerRuntimeVersion,
+	}
+	return details
+}
+
+func nodePlatform(labels map[string]string, providerID string) string {
+	switch {
+	case labels["eks.amazonaws.com/nodegroup"] != "" || labels["eks.amazonaws.com/nodegroup-image"] != "" || labels["eks.amazonaws.com/capacityType"] != "":
+		return "EKS"
+	case labels["cloud.google.com/gke-nodepool"] != "":
+		return "GKE"
+	case labels["kubernetes.azure.com/agentpool"] != "":
+		return "AKS"
+	case labels["karpenter.sh/nodepool"] != "" || labels["karpenter.sh/provisioner-name"] != "":
+		return "Karpenter"
+	case strings.HasPrefix(providerID, "aws://"):
+		return "AWS"
+	case strings.HasPrefix(providerID, "gce://"):
+		return "GCP"
+	case strings.HasPrefix(providerID, "azure://"):
+		return "Azure"
+	default:
+		return "Kubernetes"
+	}
+}
+
+func nodePool(labels map[string]string) string {
+	return firstNonEmpty(
+		labels["eks.amazonaws.com/nodegroup"],
+		labels["cloud.google.com/gke-nodepool"],
+		labels["kubernetes.azure.com/agentpool"],
+		labels["karpenter.sh/nodepool"],
+		labels["karpenter.sh/provisioner-name"],
+	)
+}
+
+func nodeCapacityType(labels map[string]string) string {
+	capacityType := firstNonEmpty(
+		labels["eks.amazonaws.com/capacityType"],
+		labels["karpenter.sh/capacity-type"],
+		labels["cloud.google.com/gke-provisioning"],
+		labels["kubernetes.azure.com/scalesetpriority"],
+	)
+	if capacityType == "" && labels["cloud.google.com/gke-spot"] == "true" {
+		capacityType = "spot"
+	}
+	return strings.ToLower(capacityType)
 }
 
 func (n *Node) BindPod(pod *Pod) {

@@ -88,3 +88,99 @@ func TestNodeNotCordoned(t *testing.T) {
 		t.Errorf("expected node to not be cordoned")
 	}
 }
+
+func TestNodeDetailsEKS(t *testing.T) {
+	n := testNode("mynode")
+	n.Spec.ProviderID = "aws:///us-east-1a/i-123"
+	n.Labels = map[string]string{
+		"node.kubernetes.io/instance-type": "t3.medium",
+		"topology.kubernetes.io/region":    "us-east-1",
+		"topology.kubernetes.io/zone":      "us-east-1a",
+		"kubernetes.io/os":                 "linux",
+		"kubernetes.io/arch":               "amd64",
+		"eks.amazonaws.com/nodegroup":      "workers",
+		"eks.amazonaws.com/capacityType":   "SPOT",
+	}
+	n.Status.NodeInfo = v1.NodeSystemInfo{
+		OSImage:                 "Amazon Linux 2023",
+		KubeletVersion:          "v1.32.1-eks",
+		ContainerRuntimeVersion: "containerd://1.7.27",
+	}
+
+	got := model.NewNode(n).Details()
+	if got.Platform != "EKS" || got.InstanceType != "t3.medium" || got.Pool != "workers" || got.CapacityType != "spot" {
+		t.Fatalf("Details() = %#v", got)
+	}
+	if got.Zone != "us-east-1a" || got.OS != "linux" || got.Architecture != "amd64" {
+		t.Fatalf("Details() = %#v", got)
+	}
+}
+
+func TestNodeDetailsMissingOptionalMetadata(t *testing.T) {
+	got := model.NewNode(testNode("standalone")).Details()
+	if got.Platform != "Kubernetes" {
+		t.Fatalf("Details().Platform = %q, want Kubernetes", got.Platform)
+	}
+	if got.InstanceType != "" || got.Pool != "" || got.CapacityType != "" {
+		t.Fatalf("Details() unexpectedly populated optional metadata: %#v", got)
+	}
+}
+
+func TestNodeDetailsProviderSpecificLabels(t *testing.T) {
+	tests := []struct {
+		name         string
+		providerID   string
+		labels       map[string]string
+		platform     string
+		pool         string
+		capacityType string
+	}{
+		{
+			name: "GKE spot",
+			labels: map[string]string{
+				"cloud.google.com/gke-nodepool": "batch",
+				"cloud.google.com/gke-spot":     "true",
+			},
+			platform:     "GKE",
+			pool:         "batch",
+			capacityType: "spot",
+		},
+		{
+			name: "AKS spot",
+			labels: map[string]string{
+				"kubernetes.azure.com/agentpool":        "workers",
+				"kubernetes.azure.com/scalesetpriority": "Spot",
+			},
+			platform:     "AKS",
+			pool:         "workers",
+			capacityType: "spot",
+		},
+		{
+			name: "Karpenter",
+			labels: map[string]string{
+				"karpenter.sh/nodepool":      "general",
+				"karpenter.sh/capacity-type": "reserved",
+			},
+			platform:     "Karpenter",
+			pool:         "general",
+			capacityType: "reserved",
+		},
+		{
+			name:       "unmanaged AWS",
+			providerID: "aws:///us-east-1a/i-123",
+			platform:   "AWS",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			n := testNode("node")
+			n.Spec.ProviderID = tt.providerID
+			n.Labels = tt.labels
+			got := model.NewNode(n).Details()
+			if got.Platform != tt.platform || got.Pool != tt.pool || got.CapacityType != tt.capacityType {
+				t.Fatalf("Details() = %#v", got)
+			}
+		})
+	}
+}
