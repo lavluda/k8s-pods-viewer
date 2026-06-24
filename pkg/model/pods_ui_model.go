@@ -103,6 +103,7 @@ type podUsageSnapshot struct {
 type nodeUsageRow struct {
 	name        string
 	alias       string
+	details     NodeDetails
 	ready       bool
 	cordoned    bool
 	pods        int
@@ -439,7 +440,6 @@ func splitUnhealthy(pods []*Pod) (warn int, crit int) {
 	}
 	return
 }
-
 
 func (u *PodsUIModel) renderPage(w io.Writer, page []podGroup, selectedPod *Pod, nodeAliases map[string]string) {
 	width := u.podPanelWidth()
@@ -944,6 +944,7 @@ func (u *PodsUIModel) renderNodeUsagePanel(nodes []*Node, pods []*Pod, nodeAlias
 		rows = append(rows, nodeUsageRow{
 			name:        node.Name(),
 			alias:       nodeAlias(nodeAliases, node.Name()),
+			details:     node.Details(),
 			ready:       node.Ready(),
 			cordoned:    node.Cordoned(),
 			pods:        node.NumPods(),
@@ -980,6 +981,14 @@ func (u *PodsUIModel) renderNodeUsagePanel(nodes []*Node, pods []*Pod, nodeAlias
 			extras = append(extras, renderBadge("Cordoned", lipgloss.Color(u.style.yellowHex), lipgloss.Color("#332613"), true))
 		}
 		fmt.Fprintf(&inner, "%s  %s\n", name, strings.Join(extras, " "))
+		if u.showDetails {
+			if summary := formatNodeDetails(row.details); summary != "" {
+				fmt.Fprintln(&inner, lipgloss.NewStyle().Foreground(podsSurfaceMuted).Render(summary))
+			}
+			if system := formatNodeSystemDetails(row.details); system != "" {
+				fmt.Fprintln(&inner, lipgloss.NewStyle().Foreground(podsSurfaceDim).Render(system))
+			}
+		}
 
 		cpuReqPct := quantityPct(row.cpuAssigned, row.cpuAlloc)
 		memReqPct := quantityPct(row.memAssigned, row.memAlloc)
@@ -1000,6 +1009,52 @@ func (u *PodsUIModel) renderNodeUsagePanel(nodes []*Node, pods []*Pod, nodeAlias
 		inner.WriteString("\n")
 	}
 	return renderPanel(width, "Node Pressure", "", strings.TrimRight(inner.String(), "\n"), podsPanelBorder)
+}
+
+func formatNodeDetails(details NodeDetails) string {
+	fields := []string{details.Platform}
+	if details.InstanceType != "" {
+		fields = append(fields, details.InstanceType)
+	}
+	if details.Pool != "" {
+		fields = append(fields, "pool "+details.Pool)
+	}
+	if details.CapacityType != "" {
+		fields = append(fields, details.CapacityType)
+	}
+	if details.Zone != "" {
+		fields = append(fields, details.Zone)
+	} else if details.Region != "" {
+		fields = append(fields, details.Region)
+	}
+	return strings.Join(nonEmptyStrings(fields), " · ")
+}
+
+func formatNodeSystemDetails(details NodeDetails) string {
+	fields := []string{}
+	if platform := strings.Trim(strings.Join(nonEmptyStrings([]string{details.OS, details.Architecture}), "/"), "/"); platform != "" {
+		fields = append(fields, platform)
+	}
+	if details.OSImage != "" {
+		fields = append(fields, details.OSImage)
+	}
+	if details.KubeletVersion != "" {
+		fields = append(fields, "kubelet "+details.KubeletVersion)
+	}
+	if details.ContainerRuntime != "" {
+		fields = append(fields, details.ContainerRuntime)
+	}
+	return strings.Join(fields, " · ")
+}
+
+func nonEmptyStrings(values []string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			result = append(result, value)
+		}
+	}
+	return result
 }
 
 // nodeSlimBarWidth sizes the per-node bar so the row fits inside the right
@@ -1372,7 +1427,6 @@ func renderPanel(width int, title string, rightLabel string, body string, border
 	b.WriteString(border("╰" + strings.Repeat("─", width-2) + "╯"))
 	return b.String()
 }
-
 
 // renderKbdChip renders a `kbd`-style chip: a small bordered key followed by a
 // dim label. Used in the footer shortcut row.
@@ -1777,9 +1831,10 @@ func quantityPct(used resource.Quantity, alloc resource.Quantity) float64 {
 // popup overlays the pod list on the left side.
 //
 // For each overlay row:
-//   left  = background[:startCol]   (ANSI-truncated)
-//   mid   = overlay line            (the popup panel line)
-//   right = background[startCol+overlayWidth:]  (ANSI-skipped, keeps sidebar)
+//
+//	left  = background[:startCol]   (ANSI-truncated)
+//	mid   = overlay line            (the popup panel line)
+//	right = background[startCol+overlayWidth:]  (ANSI-skipped, keeps sidebar)
 func overlayAt(background, overlay string, startRow, startCol int) string {
 	// Preserve whatever trailing newline the background had so the footer
 	// separator is not broken when we reassemble the lines.

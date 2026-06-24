@@ -29,7 +29,15 @@ func TestPanelLayoutSnapshot(t *testing.T) {
 	uiModel.SetResources([]string{string(v1.ResourceCPU), string(v1.ResourceMemory)})
 
 	node := NewNode(&v1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: "node-a"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "node-a",
+			Labels: map[string]string{
+				"node.kubernetes.io/instance-type": "t3.medium",
+				"topology.kubernetes.io/zone":      "us-east-1a",
+				"eks.amazonaws.com/nodegroup":      "workers",
+				"eks.amazonaws.com/capacityType":   "SPOT",
+			},
+		},
 		Status: v1.NodeStatus{
 			Allocatable: v1.ResourceList{
 				v1.ResourceCPU:    resource.MustParse("4"),
@@ -93,6 +101,39 @@ func TestPanelLayoutSnapshot(t *testing.T) {
 
 	if testing.Verbose() {
 		fmt.Println(out)
+	}
+}
+
+func TestNodeDetailsRenderOnlyInDetailedMode(t *testing.T) {
+	style, err := ParseStyle("#04B575,#FFFF00,#FF0000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	uiModel := NewPodsUIModel("cpu=dsc", style)
+	uiModel.width = 180
+	node := NewNode(&v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "node-a",
+			Labels: map[string]string{
+				"node.kubernetes.io/instance-type": "t3.medium",
+				"topology.kubernetes.io/zone":      "us-east-1a",
+				"eks.amazonaws.com/nodegroup":      "workers",
+			},
+		},
+		Status: v1.NodeStatus{Allocatable: v1.ResourceList{v1.ResourceCPU: resource.MustParse("2")}},
+	})
+	node.Show()
+	uiModel.Cluster().AddNode(node)
+
+	if got := uiModel.View(); strings.Contains(got, "t3.medium") {
+		t.Fatalf("compact View() unexpectedly contains node details")
+	}
+	uiModel.showDetails = true
+	got := uiModel.View()
+	for _, want := range []string{"EKS", "t3.medium", "pool workers", "us-east-1a"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("detailed View() missing %q\n%s", want, got)
+		}
 	}
 }
 

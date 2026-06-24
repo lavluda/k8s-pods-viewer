@@ -34,7 +34,8 @@ Latest release notes: [v1.4.2](docs/releases/v1.4.2.md).
 - Semantic pod status indicators that prefer current readiness over stale restart history
 - Keyboard sorting for `cpu`, `memory`, and `status`
 - Live `/` filtering across pod, namespace, workload, and node names
-- Compact node aliases with a detailed info toggle
+- Compact node aliases with a detailed info toggle for optional instance type,
+  region/zone, node pool, capacity type, OS, architecture, kubelet, and runtime metadata
 - A right-side node panel with per-node CPU and memory usage
 - A top dashboard header with context, cluster summary, and keyboard shortcuts
 - A right-side highlights rail for hot pods, restart visibility, and cluster watch status
