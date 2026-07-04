@@ -14,7 +14,7 @@ It is designed for the common questions behind noisy clusters: which pods are us
 brew install lavluda/tap/k8s-pods-viewer
 ```
 
-Latest release notes: [v1.4.2](docs/releases/v1.4.2.md).
+Latest release notes: [v1.5.0](docs/releases/v1.5.0.md).
 
 ## Preview
 
