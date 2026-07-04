@@ -442,8 +442,8 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ## github.com/emicklei/go-restful/v3
 
 * Name: github.com/emicklei/go-restful/v3
-* Version: v3.12.2
-* License: [MIT](https://github.com/emicklei/go-restful/blob/v3.12.2/LICENSE)
+* Version: v3.13.0
+* License: [MIT](https://github.com/emicklei/go-restful/blob/v3.13.0/LICENSE)
 
 ```
 Copyright (c) 2012,2013 Ernest Micklei
@@ -2526,8 +2526,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## github.com/pmezard/go-difflib/difflib
 
 * Name: github.com/pmezard/go-difflib/difflib
-* Version: v1.0.0
-* License: [BSD-3-Clause](https://github.com/pmezard/go-difflib/blob/v1.0.0/LICENSE)
+* Version: v1.0.1-0.20181226105442-5d4384ee4fb2
+* License: [BSD-3-Clause](https://github.com/pmezard/go-difflib/blob/5d4384ee4fb2/LICENSE)
 
 ```
 Copyright (c) 2013, Patrick Mezard
@@ -2966,8 +2966,8 @@ limitations under the License.
 ## golang.org/x/net
 
 * Name: golang.org/x/net
-* Version: v0.47.0
-* License: [BSD-3-Clause](https://cs.opensource.google/go/x/net/+/v0.47.0:LICENSE)
+* Version: v0.49.0
+* License: [BSD-3-Clause](https://cs.opensource.google/go/x/net/+/v0.49.0:LICENSE)
 
 ```
 Copyright 2009 The Go Authors.
@@ -3003,8 +3003,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## golang.org/x/oauth2
 
 * Name: golang.org/x/oauth2
-* Version: v0.30.0
-* License: [BSD-3-Clause](https://cs.opensource.google/go/x/oauth2/+/v0.30.0:LICENSE)
+* Version: v0.34.0
+* License: [BSD-3-Clause](https://cs.opensource.google/go/x/oauth2/+/v0.34.0:LICENSE)
 
 ```
 Copyright 2009 The Go Authors.
@@ -3040,8 +3040,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## golang.org/x/sys/unix
 
 * Name: golang.org/x/sys/unix
-* Version: v0.38.0
-* License: [BSD-3-Clause](https://cs.opensource.google/go/x/sys/+/v0.38.0:LICENSE)
+* Version: v0.40.0
+* License: [BSD-3-Clause](https://cs.opensource.google/go/x/sys/+/v0.40.0:LICENSE)
 
 ```
 Copyright 2009 The Go Authors.
@@ -3077,8 +3077,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## golang.org/x/term
 
 * Name: golang.org/x/term
-* Version: v0.37.0
-* License: [BSD-3-Clause](https://cs.opensource.google/go/x/term/+/v0.37.0:LICENSE)
+* Version: v0.39.0
+* License: [BSD-3-Clause](https://cs.opensource.google/go/x/term/+/v0.39.0:LICENSE)
 
 ```
 Copyright 2009 The Go Authors.
@@ -3114,8 +3114,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## golang.org/x/text
 
 * Name: golang.org/x/text
-* Version: v0.35.0
-* License: [BSD-3-Clause](https://cs.opensource.google/go/x/text/+/v0.35.0:LICENSE)
+* Version: v0.38.0
+* License: [BSD-3-Clause](https://cs.opensource.google/go/x/text/+/v0.38.0:LICENSE)
 
 ```
 Copyright 2009 The Go Authors.
@@ -3151,8 +3151,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## golang.org/x/time/rate
 
 * Name: golang.org/x/time/rate
-* Version: v0.13.0
-* License: [BSD-3-Clause](https://cs.opensource.google/go/x/time/+/v0.13.0:LICENSE)
+* Version: v0.14.0
+* License: [BSD-3-Clause](https://cs.opensource.google/go/x/time/+/v0.14.0:LICENSE)
 
 ```
 Copyright 2009 The Go Authors.
@@ -3188,8 +3188,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## google.golang.org/protobuf
 
 * Name: google.golang.org/protobuf
-* Version: v1.36.8
-* License: [BSD-3-Clause](https://github.com/protocolbuffers/protobuf-go/blob/v1.36.8/LICENSE)
+* Version: v1.36.12-0.20260120151049-f2248ac996af
+* License: [BSD-3-Clause](https://github.com/protocolbuffers/protobuf-go/blob/f2248ac996af/LICENSE)
 
 ```
 Copyright (c) 2018 The Go Authors. All rights reserved.
@@ -3358,8 +3358,8 @@ limitations under the License.
 ## k8s.io/api
 
 * Name: k8s.io/api
-* Version: v0.35.3
-* License: [Apache-2.0](https://github.com/kubernetes/api/blob/v0.35.3/LICENSE)
+* Version: v0.36.1
+* License: [Apache-2.0](https://github.com/kubernetes/api/blob/v0.36.1/LICENSE)
 
 ```
 
@@ -3570,8 +3570,8 @@ limitations under the License.
 ## k8s.io/apimachinery/pkg
 
 * Name: k8s.io/apimachinery/pkg
-* Version: v0.35.3
-* License: [Apache-2.0](https://github.com/kubernetes/apimachinery/blob/v0.35.3/LICENSE)
+* Version: v0.36.1
+* License: [Apache-2.0](https://github.com/kubernetes/apimachinery/blob/v0.36.1/LICENSE)
 
 ```
 
@@ -3782,8 +3782,8 @@ limitations under the License.
 ## k8s.io/apimachinery/third_party/forked/golang
 
 * Name: k8s.io/apimachinery/third_party/forked/golang
-* Version: v0.35.3
-* License: [BSD-3-Clause](https://github.com/kubernetes/apimachinery/blob/v0.35.3/third_party/forked/golang/LICENSE)
+* Version: v0.36.1
+* License: [BSD-3-Clause](https://github.com/kubernetes/apimachinery/blob/v0.36.1/third_party/forked/golang/LICENSE)
 
 ```
 Copyright (c) 2009 The Go Authors. All rights reserved.
@@ -3819,8 +3819,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## k8s.io/client-go
 
 * Name: k8s.io/client-go
-* Version: v0.35.3
-* License: [Apache-2.0](https://github.com/kubernetes/client-go/blob/v0.35.3/LICENSE)
+* Version: v0.36.1
+* License: [Apache-2.0](https://github.com/kubernetes/client-go/blob/v0.36.1/LICENSE)
 
 ```
 
@@ -4232,8 +4232,8 @@ third-party archives.
 ## k8s.io/kube-openapi/pkg
 
 * Name: k8s.io/kube-openapi/pkg
-* Version: v0.0.0-20250910181357-589584f1c912
-* License: [Apache-2.0](https://github.com/kubernetes/kube-openapi/blob/589584f1c912/LICENSE)
+* Version: v0.0.0-20260317180543-43fb72c5454a
+* License: [Apache-2.0](https://github.com/kubernetes/kube-openapi/blob/43fb72c5454a/LICENSE)
 
 ```
 
@@ -4444,8 +4444,8 @@ third-party archives.
 ## k8s.io/kube-openapi/pkg/internal/third_party/go-json-experiment/json
 
 * Name: k8s.io/kube-openapi/pkg/internal/third_party/go-json-experiment/json
-* Version: v0.0.0-20250910181357-589584f1c912
-* License: [BSD-3-Clause](https://github.com/kubernetes/kube-openapi/blob/589584f1c912/pkg/internal/third_party/go-json-experiment/json/LICENSE)
+* Version: v0.0.0-20260317180543-43fb72c5454a
+* License: [BSD-3-Clause](https://github.com/kubernetes/kube-openapi/blob/43fb72c5454a/pkg/internal/third_party/go-json-experiment/json/LICENSE)
 
 ```
 Copyright (c) 2020 The Go Authors. All rights reserved.
@@ -4481,8 +4481,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## k8s.io/kube-openapi/pkg/validation/spec
 
 * Name: k8s.io/kube-openapi/pkg/validation/spec
-* Version: v0.0.0-20250910181357-589584f1c912
-* License: [Apache-2.0](https://github.com/kubernetes/kube-openapi/blob/589584f1c912/pkg/validation/spec/LICENSE)
+* Version: v0.0.0-20260317180543-43fb72c5454a
+* License: [Apache-2.0](https://github.com/kubernetes/kube-openapi/blob/43fb72c5454a/pkg/validation/spec/LICENSE)
 
 ```
 
@@ -4693,8 +4693,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## k8s.io/metrics/pkg
 
 * Name: k8s.io/metrics/pkg
-* Version: v0.35.3
-* License: [Apache-2.0](https://github.com/kubernetes/metrics/blob/v0.35.3/LICENSE)
+* Version: v0.36.1
+* License: [Apache-2.0](https://github.com/kubernetes/metrics/blob/v0.36.1/LICENSE)
 
 ```
                                  Apache License
@@ -4904,8 +4904,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## k8s.io/utils
 
 * Name: k8s.io/utils
-* Version: v0.0.0-20251002143259-bc988d571ff4
-* License: [Apache-2.0](https://github.com/kubernetes/utils/blob/bc988d571ff4/LICENSE)
+* Version: v0.0.0-20260210185600-b8788abfbbc2
+* License: [Apache-2.0](https://github.com/kubernetes/utils/blob/b8788abfbbc2/LICENSE)
 
 ```
 
@@ -5116,8 +5116,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## k8s.io/utils/internal/third_party/forked/golang/net
 
 * Name: k8s.io/utils/internal/third_party/forked/golang/net
-* Version: v0.0.0-20251002143259-bc988d571ff4
-* License: [BSD-3-Clause](https://github.com/kubernetes/utils/blob/bc988d571ff4/internal/third_party/forked/golang/LICENSE)
+* Version: v0.0.0-20260210185600-b8788abfbbc2
+* License: [BSD-3-Clause](https://github.com/kubernetes/utils/blob/b8788abfbbc2/internal/third_party/forked/golang/LICENSE)
 
 ```
 Copyright (c) 2012 The Go Authors. All rights reserved.
@@ -5613,8 +5613,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## sigs.k8s.io/structured-merge-diff/v6
 
 * Name: sigs.k8s.io/structured-merge-diff/v6
-* Version: v6.3.0
-* License: [Apache-2.0](https://github.com/kubernetes-sigs/structured-merge-diff/blob/v6.3.0/LICENSE)
+* Version: v6.3.2
+* License: [Apache-2.0](https://github.com/kubernetes-sigs/structured-merge-diff/blob/v6.3.2/LICENSE)
 
 ```
                                  Apache License
