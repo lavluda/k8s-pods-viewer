@@ -238,14 +238,9 @@ func (u *PodsUIModel) View() string {
 		if leftWidth <= 0 {
 			leftWidth = u.width
 		}
-		startCol := leftWidth - popupWidth - 3
-		if startCol < 20 {
-			startCol = 20
-		}
+		startRow, startCol := u.actionPopoverPosition(state, popupWidth, leftWidth)
 		popup := u.renderActionPopover(state.selectedPod, popupWidth)
-		// row 2 inside combinedBody = inside the pod panel, just past the title
-		// and group-header lines, so the popup floats near the selected pod.
-		combinedBody = overlayAt(combinedBody, popup, 2, startCol)
+		combinedBody = overlayAt(combinedBody, popup, startRow, startCol)
 	}
 
 	out := strings.TrimRight(header+"\n"+combinedBody+footer.String(), "\n")
@@ -441,24 +436,9 @@ func splitUnhealthy(pods []*Pod) (warn int, crit int) {
 	return
 }
 
-func (u *PodsUIModel) renderPage(w io.Writer, page []podGroup, selectedPod *Pod, nodeAliases map[string]string) {
+func (u *PodsUIModel) renderPage(w io.Writer, page podPageLayout, selectedPod *Pod, nodeAliases map[string]string) {
 	width := u.podPanelWidth()
-	var inner strings.Builder
-	for groupIndex, group := range page {
-		if group.showHeader {
-			fmt.Fprintf(&inner, "%s  %s\n",
-				lipgloss.NewStyle().Foreground(u.style.Accent()).Render("▸ "+group.label),
-				lipgloss.NewStyle().Foreground(podsSurfaceDim).Render(fmt.Sprintf("%d pods", group.totalPods)),
-			)
-		}
-		for _, pod := range group.pods {
-			inner.WriteString(u.renderPodBlock(pod, pod == selectedPod, nodeAliases))
-		}
-		if groupIndex < len(page)-1 {
-			fmt.Fprintln(&inner)
-		}
-	}
-
+	inner := u.renderPodPageBody(page, selectedPod, nodeAliases)
 	title := "Pods · Grouped By " + u.groupModeLabel()
 	if u.groupMode == groupModeFlat {
 		title = "Pods · Flat"
@@ -468,14 +448,14 @@ func (u *PodsUIModel) renderPage(w io.Writer, page []podGroup, selectedPod *Pod,
 		sortArrow = "↑"
 	}
 	right := fmt.Sprintf("sort %s %s", u.sortLabel(), sortArrow)
-	io.WriteString(w, renderPanel(width, title, right, strings.TrimRight(inner.String(), "\n"), podsPanelBorder))
+	io.WriteString(w, renderPanel(width, title, right, strings.TrimRight(inner, "\n"), podsPanelBorder))
 	io.WriteString(w, "\n")
 }
 
 // renderPodBlock paints one pod row group: a name line (dot, name, status,
 // restarts, node) followed by per-resource bar lines. Selection paints a
 // green left-accent gutter; the bar style obeys u.style.BarStyle().
-func (u *PodsUIModel) renderPodBlock(pod *Pod, selected bool, nodeAliases map[string]string) string {
+func (u *PodsUIModel) renderPodBlock(pod *Pod, selected bool, nodeAliases map[string]string, contentWidth int) string {
 	health := pod.Health()
 	dot := u.style.SeverityColor(health.Severity)
 	accent := u.style.Accent()
@@ -524,7 +504,7 @@ func (u *PodsUIModel) renderPodBlock(pod *Pod, selected bool, nodeAliases map[st
 	usage := pod.Usage()
 	requested := pod.Requested()
 	limits := pod.Limits()
-	barWidth := u.resourceBarWidth()
+	barWidth := u.resourceBarWidthForWidth(contentWidth)
 	for _, res := range u.resources {
 		summary := summarizePodUsage(res, usage[res], requested[res], limits)
 		fmt.Fprintf(&b, "   %s  %s  %s  %s\n",
@@ -560,16 +540,24 @@ func (u *PodsUIModel) writeFooter(w io.Writer) {
 	}
 	u.writeStatusLine(w)
 
-	chips := []struct{ key, label string }{
-		{"↑↓", "nav"},
-		{"←→", "page"},
-		{"enter", "actions"},
-		{"c/m/s", "sort"},
-		{"g", "group"},
-		{"i", "details"},
-		{"/", "filter"},
-		{"q", "quit"},
+	chips := []struct{ key, label string }{{"↑↓", "nav"}}
+	if u.isMultiColumnState(u.buildPodListState()) {
+		chips = append(chips,
+			struct{ key, label string }{"←→", "cols"},
+			struct{ key, label string }{"pgup/dn", "page"},
+			struct{ key, label string }{"[/]", "page"},
+		)
+	} else {
+		chips = append(chips, struct{ key, label string }{"←→", "page"})
 	}
+	chips = append(chips,
+		struct{ key, label string }{"enter", "actions"},
+		struct{ key, label string }{"c/m/s", "sort"},
+		struct{ key, label string }{"g", "group"},
+		struct{ key, label string }{"i", "details"},
+		struct{ key, label string }{"/", "filter"},
+		struct{ key, label string }{"q", "quit"},
+	)
 	rendered := make([]string, 0, len(chips))
 	for _, c := range chips {
 		rendered = append(rendered, renderKbdChip(c.key, c.label))
@@ -625,55 +613,71 @@ func (u *PodsUIModel) groupKeyForPod(pod *Pod) (key string, label string) {
 	}
 }
 
-func (u *PodsUIModel) paginateGroups(groups []podGroup) [][]podGroup {
+func (u *PodsUIModel) paginateGroups(groups []podGroup) []podPageLayout {
 	if len(groups) == 0 {
 		return nil
 	}
 	budget := u.availablePodLines()
 	if budget <= 0 {
-		return [][]podGroup{groups}
+		return []podPageLayout{{columns: []podColumnLayout{{groups: groups, pods: flattenGroupedPods(groups)}}}}
 	}
 
 	linesPerPod := u.linesPerPod()
-	pages := [][]podGroup{}
-	page := []podGroup{}
+	columnCount := u.podColumnCount()
+	pages := []podPageLayout{}
+	page := podPageLayout{columns: make([]podColumnLayout, 1, columnCount)}
+	columnIndex := 0
 	remaining := budget
 
-	flushPage := func() {
-		if len(page) == 0 {
+	appendPage := func() {
+		nonEmpty := make([]podColumnLayout, 0, len(page.columns))
+		for _, column := range page.columns {
+			if len(column.pods) > 0 {
+				nonEmpty = append(nonEmpty, column)
+			}
+		}
+		if len(nonEmpty) == 0 {
 			return
 		}
-		pages = append(pages, page)
-		page = nil
+		pages = append(pages, podPageLayout{columns: nonEmpty})
+	}
+
+	advanceColumn := func() {
+		if columnIndex+1 < columnCount {
+			columnIndex++
+			if columnIndex >= len(page.columns) {
+				page.columns = append(page.columns, podColumnLayout{})
+			}
+			remaining = budget
+			return
+		}
+		appendPage()
+		page = podPageLayout{columns: make([]podColumnLayout, 1, columnCount)}
+		columnIndex = 0
 		remaining = budget
 	}
 
 	for _, group := range groups {
 		index := 0
 		for index < len(group.pods) {
+			column := &page.columns[columnIndex]
 			separatorCost := 0
-			if len(page) > 0 {
+			if len(column.groups) > 0 {
 				separatorCost = 1
 			}
 			headerCost := 0
 			if group.showHeader {
 				headerCost = 1
 			}
-
-			required := linesPerPod + headerCost + separatorCost
-			if remaining < required && len(page) > 0 {
-				flushPage()
+			available := remaining - separatorCost - headerCost
+			if available < linesPerPod && len(column.pods) > 0 {
+				advanceColumn()
+				continue
 			}
-			separatorCost = 0
-			if len(page) > 0 {
-				separatorCost = 1
+			if available < linesPerPod {
+				available = linesPerPod
 			}
-			required = linesPerPod + headerCost + separatorCost
-			if remaining < required {
-				remaining = required
-			}
-
-			fit := (remaining - headerCost - separatorCost) / linesPerPod
+			fit := available / linesPerPod
 			if fit < 1 {
 				fit = 1
 			}
@@ -681,22 +685,33 @@ func (u *PodsUIModel) paginateGroups(groups []podGroup) [][]podGroup {
 				fit = len(group.pods) - index
 			}
 
-			page = append(page, podGroup{
+			fragment := podGroup{
 				key:        group.key,
 				label:      group.label,
 				totalPods:  group.totalPods,
 				showHeader: group.showHeader,
 				pods:       group.pods[index : index+fit],
-			})
+			}
+			column.groups = append(column.groups, fragment)
+			column.pods = append(column.pods, fragment.pods...)
 			remaining -= separatorCost + headerCost + fit*linesPerPod
 			index += fit
 
-			if remaining < linesPerPod && index < len(group.pods) {
-				flushPage()
+			if index < len(group.pods) {
+				advanceColumn()
+				continue
+			}
+			if remaining < linesPerPod {
+				advanceColumn()
 			}
 		}
 	}
-	flushPage()
+	appendPage()
+	for pageIndex := range pages {
+		for columnIndex := range pages[pageIndex].columns {
+			pages[pageIndex].columns[columnIndex] = u.decorateColumnLayout(pages[pageIndex].columns[columnIndex])
+		}
+	}
 	return pages
 }
 
@@ -789,11 +804,29 @@ func (u *PodsUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			u.selectPodByOffset(1)
 			return u, nil
 		case "left", "h":
+			if state := u.buildPodListState(); state.selectedPod != nil && u.isMultiColumnState(state) {
+				u.selectColumnOffset(-1)
+				return u, nil
+			}
 			if u.selectPage(u.paginator.Page - 1) {
 				return u, nil
 			}
 			return u, nil
 		case "right", "l":
+			if state := u.buildPodListState(); state.selectedPod != nil && u.isMultiColumnState(state) {
+				u.selectColumnOffset(1)
+				return u, nil
+			}
+			if u.selectPage(u.paginator.Page + 1) {
+				return u, nil
+			}
+			return u, nil
+		case "pgup", "[":
+			if u.selectPage(u.paginator.Page - 1) {
+				return u, nil
+			}
+			return u, nil
+		case "pgdown", "]":
 			if u.selectPage(u.paginator.Page + 1) {
 				return u, nil
 			}
@@ -1130,6 +1163,142 @@ func (u *PodsUIModel) renderSignalsPanel(_ []*Node, _ []*Pod, filteredPods []*Po
 	return renderPanel(width, "Highlights", "", inner.String(), podsPanelBorder)
 }
 
+func (u *PodsUIModel) renderPodPageBody(page podPageLayout, selectedPod *Pod, nodeAliases map[string]string) string {
+	columnWidth := u.podColumnWidth()
+	if len(page.columns) <= 1 {
+		var inner strings.Builder
+		for groupIndex, group := range page.columns[0].groups {
+			if group.showHeader {
+				fmt.Fprintf(&inner, "%s  %s\n",
+					lipgloss.NewStyle().Foreground(u.style.Accent()).Render("▸ "+group.label),
+					lipgloss.NewStyle().Foreground(podsSurfaceDim).Render(fmt.Sprintf("%d pods", group.totalPods)),
+				)
+			}
+			for _, pod := range group.pods {
+				inner.WriteString(u.renderPodBlock(pod, pod == selectedPod, nodeAliases, columnWidth))
+			}
+			if groupIndex < len(page.columns[0].groups)-1 {
+				fmt.Fprintln(&inner)
+			}
+		}
+		return strings.TrimRight(inner.String(), "\n")
+	}
+
+	columnBodies := make([]string, 0, len(page.columns))
+	for _, column := range page.columns {
+		var inner strings.Builder
+		for groupIndex, group := range column.groups {
+			if group.showHeader {
+				fmt.Fprintf(&inner, "%s  %s\n",
+					lipgloss.NewStyle().Foreground(u.style.Accent()).Render("▸ "+group.label),
+					lipgloss.NewStyle().Foreground(podsSurfaceDim).Render(fmt.Sprintf("%d pods", group.totalPods)),
+				)
+			}
+			for _, pod := range group.pods {
+				inner.WriteString(u.renderPodBlock(pod, pod == selectedPod, nodeAliases, columnWidth))
+			}
+			if groupIndex < len(column.groups)-1 {
+				fmt.Fprintln(&inner)
+			}
+		}
+		columnBodies = append(columnBodies, strings.TrimRight(inner.String(), "\n"))
+	}
+	return joinFixedColumns(columnBodies, columnWidth, u.podColumnGap())
+}
+
+func joinFixedColumns(columns []string, columnWidth, gap int) string {
+	if len(columns) == 0 {
+		return ""
+	}
+	linesByColumn := make([][]string, 0, len(columns))
+	maxLines := 0
+	for _, column := range columns {
+		lines := strings.Split(strings.TrimRight(column, "\n"), "\n")
+		if len(lines) == 1 && lines[0] == "" {
+			lines = nil
+		}
+		linesByColumn = append(linesByColumn, lines)
+		if len(lines) > maxLines {
+			maxLines = len(lines)
+		}
+	}
+
+	var b strings.Builder
+	separator := strings.Repeat(" ", gap)
+	for lineIndex := 0; lineIndex < maxLines; lineIndex++ {
+		for columnIndex, lines := range linesByColumn {
+			line := ""
+			if lineIndex < len(lines) {
+				line = fitANSIWidth(lines[lineIndex], columnWidth)
+			}
+			padding := columnWidth - ansi.StringWidth(line)
+			if padding < 0 {
+				padding = 0
+			}
+			b.WriteString(line)
+			b.WriteString(strings.Repeat(" ", padding))
+			if columnIndex < len(linesByColumn)-1 {
+				b.WriteString(separator)
+			}
+		}
+		if lineIndex < maxLines-1 {
+			b.WriteString("\n")
+		}
+	}
+	return b.String()
+}
+
+func (u *PodsUIModel) decorateColumnLayout(column podColumnLayout) podColumnLayout {
+	column.lineOffsets = map[objectKey]int{}
+	line := 0
+	for groupIndex, group := range column.groups {
+		if group.showHeader {
+			line++
+		}
+		for _, pod := range group.pods {
+			key := objectKey{namespace: pod.Namespace(), name: pod.Name()}
+			column.lineOffsets[key] = line
+			line += u.linesPerPod()
+		}
+		if groupIndex < len(column.groups)-1 {
+			line++
+		}
+	}
+	column.contentLines = line
+	return column
+}
+
+func (u *PodsUIModel) actionPopoverPosition(state podListState, popupWidth, leftWidth int) (int, int) {
+	startRow := 2
+	startCol := leftWidth - popupWidth - 3
+	if startCol < 20 {
+		startCol = 20
+	}
+	if !state.selectedPos.valid || len(state.pages) == 0 {
+		return startRow, startCol
+	}
+	columnWidth := u.podColumnWidth()
+	columnStart := 2 + state.selectedPos.column*(columnWidth+u.podColumnGap())
+	startRow = 1 + state.selectedPos.line
+	preferredRight := columnStart + columnWidth + 1
+	if preferredRight+popupWidth <= leftWidth-1 {
+		startCol = preferredRight
+	} else {
+		startCol = columnStart - popupWidth - 1
+	}
+	if startCol < 2 {
+		startCol = 2
+	}
+	maxCol := leftWidth - popupWidth - 1
+	if startCol > maxCol {
+		startCol = maxCol
+	}
+	if startRow < 2 {
+		startRow = 2
+	}
+	return startRow, startCol
+}
+
 func (u *PodsUIModel) renderNodeUsagePlaceholder(width int, available bool) string {
 	message := "Waiting for node data…"
 	if !available {
@@ -1208,6 +1377,47 @@ func (u *PodsUIModel) podPanelWidth() int {
 	return 96
 }
 
+func (u *PodsUIModel) podColumnGap() int {
+	return 2
+}
+
+func (u *PodsUIModel) podColumnMinWidth() int {
+	if u.showDetails {
+		return 84
+	}
+	return 64
+}
+
+func (u *PodsUIModel) podPanelContentWidth() int {
+	width := u.podPanelWidth() - 4
+	if width < 12 {
+		return 12
+	}
+	return width
+}
+
+func (u *PodsUIModel) podColumnCount() int {
+	contentWidth := u.podPanelContentWidth()
+	minWidth := u.podColumnMinWidth()
+	gap := u.podColumnGap()
+	maxColumns := (contentWidth + gap) / (minWidth + gap)
+	if maxColumns < 2 {
+		return 1
+	}
+	if maxColumns > 4 {
+		maxColumns = 4
+	}
+	return maxColumns
+}
+
+func (u *PodsUIModel) podColumnWidth() int {
+	columnCount := u.podColumnCount()
+	if columnCount <= 1 {
+		return u.podPanelContentWidth()
+	}
+	return (u.podPanelContentWidth() - (columnCount-1)*u.podColumnGap()) / columnCount
+}
+
 func (u *PodsUIModel) colorizePct(pct float64, severity PodHealthSeverity) string {
 	return lipgloss.NewStyle().Foreground(u.style.SeverityColor(severity)).Bold(true).Render(fmt.Sprintf("%.0f%%", pct*100))
 }
@@ -1224,10 +1434,14 @@ func (u *PodsUIModel) summaryBarWidth() int {
 }
 
 func (u *PodsUIModel) resourceBarWidth() int {
+	return u.resourceBarWidthForWidth(u.podPanelContentWidth())
+}
+
+func (u *PodsUIModel) resourceBarWidthForWidth(contentWidth int) int {
 	// The bar sits inside the bordered pods panel and after the gutter +
 	// resource label, with room on the right for the pct (4 cells) and
 	// used/base (~16 cells). Reserve ~30 cells of chrome.
-	panelInner := u.podPanelWidth() - 4
+	panelInner := contentWidth
 	if panelInner <= 0 {
 		return 24
 	}
@@ -1296,6 +1510,9 @@ func (u *PodsUIModel) headerWidth() int {
 // - 1 group-header line amortised as a fixed overhead in availablePodLines
 func (u *PodsUIModel) linesPerPod() int {
 	base := 1 + len(u.resources)
+	if u.showDetails {
+		base += len(u.resources)
+	}
 	if u.style.Density() == DensityComfortable {
 		base++
 	}

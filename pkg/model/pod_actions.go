@@ -64,10 +64,31 @@ type podListState struct {
 	filteredPods  []*Pod
 	renderedPods  []*Pod
 	nodeAliases   map[string]string
-	pages         [][]podGroup
+	pages         []podPageLayout
 	pageStarts    []int
 	selectedIndex int
 	selectedPod   *Pod
+	selectedPos   podGridPosition
+	positions     map[objectKey]podGridPosition
+}
+
+type podColumnLayout struct {
+	groups       []podGroup
+	pods         []*Pod
+	lineOffsets  map[objectKey]int
+	contentLines int
+}
+
+type podPageLayout struct {
+	columns []podColumnLayout
+}
+
+type podGridPosition struct {
+	page   int
+	column int
+	row    int
+	line   int
+	valid  bool
 }
 
 func (a podActionKind) label() string {
@@ -132,10 +153,23 @@ func (u *PodsUIModel) buildPodListState() podListState {
 	state.renderedPods = flattenGroupedPods(groups)
 	state.pages = u.paginateGroups(groups)
 	state.pageStarts = make([]int, len(state.pages))
+	state.positions = make(map[objectKey]podGridPosition, len(state.renderedPods))
 
 	total := 0
 	for index, page := range state.pages {
 		state.pageStarts[index] = total
+		for columnIndex, column := range page.columns {
+			for rowIndex, pod := range column.pods {
+				key := objectKey{namespace: pod.Namespace(), name: pod.Name()}
+				state.positions[key] = podGridPosition{
+					page:   index,
+					column: columnIndex,
+					row:    rowIndex,
+					line:   column.lineOffsets[key],
+					valid:  true,
+				}
+			}
+		}
 		total += pagePodCount(page)
 	}
 
@@ -146,15 +180,19 @@ func (u *PodsUIModel) buildPodListState() podListState {
 	}
 	if state.selectedIndex >= 0 && state.selectedIndex < len(state.renderedPods) {
 		state.selectedPod = state.renderedPods[state.selectedIndex]
+		state.selectedPos = state.positions[objectKey{
+			namespace: state.selectedPod.Namespace(),
+			name:      state.selectedPod.Name(),
+		}]
 	}
 	u.syncPaginatorWithSelection(state)
 	return state
 }
 
-func pagePodCount(page []podGroup) int {
+func pagePodCount(page podPageLayout) int {
 	total := 0
-	for _, group := range page {
-		total += len(group.pods)
+	for _, column := range page.columns {
+		total += len(column.pods)
 	}
 	return total
 }
@@ -260,6 +298,9 @@ func (u *PodsUIModel) pageForSelection(state podListState) int {
 	if len(state.pages) == 0 || state.selectedIndex < 0 {
 		return 0
 	}
+	if state.selectedPos.valid {
+		return state.selectedPos.page
+	}
 	for index, start := range state.pageStarts {
 		end := start + pagePodCount(state.pages[index])
 		if state.selectedIndex >= start && state.selectedIndex < end {
@@ -286,6 +327,20 @@ func (u *PodsUIModel) selectPodByOffset(offset int) {
 	state := u.buildPodListState()
 	if len(state.renderedPods) == 0 {
 		u.SetTransientStatus("No pods available to select.", 2*time.Second)
+		return
+	}
+
+	if u.isMultiColumnState(state) && state.selectedPos.valid {
+		column := state.pages[state.selectedPos.page].columns[state.selectedPos.column]
+		nextRow := state.selectedPos.row + offset
+		if nextRow < 0 {
+			nextRow = 0
+		}
+		if nextRow >= len(column.pods) {
+			nextRow = len(column.pods) - 1
+		}
+		u.selectionPinned = true
+		u.setSelectedPod(column.pods[nextRow])
 		return
 	}
 
@@ -318,15 +373,53 @@ func (u *PodsUIModel) selectPage(page int) bool {
 	}
 	u.selectionPinned = true
 	u.setSelectedPod(pagePods[0])
+	u.paginator.Page = page
 	return true
 }
 
-func flattenPagePods(page []podGroup) []*Pod {
+func (u *PodsUIModel) selectColumnOffset(offset int) bool {
+	state := u.buildPodListState()
+	if !u.isMultiColumnState(state) || !state.selectedPos.valid {
+		return false
+	}
+	targetColumn := state.selectedPos.column + offset
+	page := state.pages[state.selectedPos.page]
+	if targetColumn < 0 {
+		targetColumn = 0
+	}
+	if targetColumn >= len(page.columns) {
+		targetColumn = len(page.columns) - 1
+	}
+	if targetColumn == state.selectedPos.column {
+		return false
+	}
+	targetPods := page.columns[targetColumn].pods
+	if len(targetPods) == 0 {
+		return false
+	}
+	targetRow := state.selectedPos.row
+	if targetRow >= len(targetPods) {
+		targetRow = len(targetPods) - 1
+	}
+	u.selectionPinned = true
+	u.setSelectedPod(targetPods[targetRow])
+	return true
+}
+
+func flattenPagePods(page podPageLayout) []*Pod {
 	pods := make([]*Pod, 0, pagePodCount(page))
-	for _, group := range page {
-		pods = append(pods, group.pods...)
+	for _, column := range page.columns {
+		pods = append(pods, column.pods...)
 	}
 	return pods
+}
+
+func (u *PodsUIModel) isMultiColumnState(state podListState) bool {
+	if len(state.pages) == 0 {
+		return false
+	}
+	page := state.pages[u.pageForSelection(state)]
+	return len(page.columns) > 1
 }
 
 func flattenGroupedPods(groups []podGroup) []*Pod {

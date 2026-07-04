@@ -31,6 +31,8 @@ Latest release notes: [v1.4.2](docs/releases/v1.4.2.md).
 - Inline confirmation for dangerous actions with keyboard-selectable `Confirm` / `Cancel`
 - In-app scrollable viewers for `logs` and `describe`
 - Namespace, workload, or flat grouping for pod rows
+- Adaptive multi-column pod layout on wide terminals, with `←`/`→` to move
+  between columns and `pgup`/`pgdn` (or `[`/`]`) to change pages
 - Semantic pod status indicators that prefer current readiness over stale restart history
 - Keyboard sorting for `cpu`, `memory`, and `status`
 - Live `/` filtering across pod, namespace, workload, and node names
