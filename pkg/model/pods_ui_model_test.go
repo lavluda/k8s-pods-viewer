@@ -636,6 +636,161 @@ func TestPodsUIModelInitialLoadStaysOnFirstPage(t *testing.T) {
 	}
 }
 
+func TestPodsUIModelWideLayoutUsesDynamicColumns(t *testing.T) {
+	style, err := ParseStyle("#04B575,#FFFF00,#FF0000")
+	if err != nil {
+		t.Fatalf("ParseStyle() error = %v", err)
+	}
+
+	uiModel := NewPodsUIModel("name=asc", style)
+	uiModel.width = 320
+	uiModel.height = 24
+	addSelectionTestNode(uiModel)
+	for i := 0; i < 18; i++ {
+		addTestSelectionPod(uiModel, "default", fmt.Sprintf("api-%02d", i))
+	}
+
+	state := uiModel.buildPodListState()
+	if got := len(state.pages[0].columns); got < 3 {
+		t.Fatalf("wide page column count = %d, want at least 3", got)
+	}
+
+	uiModel.width = 180
+	state = uiModel.buildPodListState()
+	if got := len(state.pages[0].columns); got != 1 {
+		t.Fatalf("narrow page column count = %d, want 1", got)
+	}
+
+	uiModel.width = 260
+	uiModel.showDetails = true
+	state = uiModel.buildPodListState()
+	if got := len(state.pages[0].columns); got < 2 {
+		t.Fatalf("detailed wide page column count = %d, want at least 2", got)
+	}
+}
+
+func TestPodsUIModelWideLayoutRepeatsGroupHeaderAcrossColumns(t *testing.T) {
+	style, err := ParseStyle("#04B575,#FFFF00,#FF0000")
+	if err != nil {
+		t.Fatalf("ParseStyle() error = %v", err)
+	}
+
+	uiModel := NewPodsUIModel("name=asc", style)
+	uiModel.width = 320
+	uiModel.height = 18
+	addSelectionTestNode(uiModel)
+	for i := 0; i < 14; i++ {
+		addTestSelectionPod(uiModel, "shared", fmt.Sprintf("api-%02d", i))
+	}
+
+	got := uiModel.View()
+	if count := strings.Count(got, "▸ shared"); count < 2 {
+		t.Fatalf("expected repeated group header in multi-column layout, got count %d\n%s", count, got)
+	}
+}
+
+func TestPodsUIModelMultiColumnNavigation(t *testing.T) {
+	style, err := ParseStyle("#04B575,#FFFF00,#FF0000")
+	if err != nil {
+		t.Fatalf("ParseStyle() error = %v", err)
+	}
+
+	uiModel := NewPodsUIModel("name=asc", style)
+	uiModel.width = 320
+	uiModel.height = 24
+	addSelectionTestNode(uiModel)
+	for i := 0; i < 18; i++ {
+		addTestSelectionPod(uiModel, "default", fmt.Sprintf("api-%02d", i))
+	}
+
+	state := uiModel.buildPodListState()
+	if len(state.pages[0].columns) < 3 {
+		t.Fatalf("expected multi-column layout, got %d columns", len(state.pages[0].columns))
+	}
+	if first := state.pages[0].columns[0].pods[0].Name(); first != "api-00" {
+		t.Fatalf("unexpected first pod %q", first)
+	}
+
+	uiModel.Update(tea.KeyMsg{Type: tea.KeyDown})
+	if got := uiModel.selectedPod.name; got != state.pages[0].columns[0].pods[1].Name() {
+		t.Fatalf("down selected %q, want %q", got, state.pages[0].columns[0].pods[1].Name())
+	}
+
+	uiModel.Update(tea.KeyMsg{Type: tea.KeyRight})
+	nextState := uiModel.buildPodListState()
+	want := nextState.pages[0].columns[1].pods[1].Name()
+	if got := uiModel.selectedPod.name; got != want {
+		t.Fatalf("right selected %q, want %q", got, want)
+	}
+
+	uiModel.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	if got := uiModel.selectedPod.name; got != nextState.pages[0].columns[0].pods[1].Name() {
+		t.Fatalf("left selected %q, want %q", got, nextState.pages[0].columns[0].pods[1].Name())
+	}
+}
+
+func TestPodsUIModelMultiColumnPagingKeys(t *testing.T) {
+	style, err := ParseStyle("#04B575,#FFFF00,#FF0000")
+	if err != nil {
+		t.Fatalf("ParseStyle() error = %v", err)
+	}
+
+	uiModel := NewPodsUIModel("name=asc", style)
+	uiModel.width = 320
+	uiModel.height = 12
+	addSelectionTestNode(uiModel)
+	for i := 0; i < 24; i++ {
+		addTestSelectionPod(uiModel, "default", fmt.Sprintf("api-%02d", i))
+	}
+
+	initial := uiModel.buildPodListState()
+	if len(initial.pages) < 2 {
+		t.Fatalf("expected multiple pages, got %d", len(initial.pages))
+	}
+
+	uiModel.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	state := uiModel.buildPodListState()
+	if got := uiModel.paginator.Page; got != 1 {
+		t.Fatalf("pgdown page = %d, want 1", got)
+	}
+	if got := uiModel.selectedPod.name; got != state.pages[1].columns[0].pods[0].Name() {
+		t.Fatalf("pgdown selected %q, want first pod on page 2", got)
+	}
+
+	uiModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'['}})
+	if got := uiModel.paginator.Page; got != 0 {
+		t.Fatalf("[ page = %d, want 0", got)
+	}
+}
+
+func TestPodsUIModelSingleColumnLeftRightStillPages(t *testing.T) {
+	style, err := ParseStyle("#04B575,#FFFF00,#FF0000")
+	if err != nil {
+		t.Fatalf("ParseStyle() error = %v", err)
+	}
+
+	uiModel := NewPodsUIModel("name=asc", style)
+	uiModel.width = 160
+	uiModel.height = 12
+	addSelectionTestNode(uiModel)
+	for i := 0; i < 12; i++ {
+		addTestSelectionPod(uiModel, "default", fmt.Sprintf("api-%02d", i))
+	}
+
+	state := uiModel.buildPodListState()
+	if len(state.pages) < 2 {
+		t.Fatalf("expected multiple pages, got %d", len(state.pages))
+	}
+	if got := len(state.pages[0].columns); got != 1 {
+		t.Fatalf("expected single column layout, got %d columns", got)
+	}
+
+	uiModel.Update(tea.KeyMsg{Type: tea.KeyRight})
+	if got := uiModel.paginator.Page; got != 1 {
+		t.Fatalf("right page = %d, want 1", got)
+	}
+}
+
 func newPodsUIModelForSelectionTest(t *testing.T) *PodsUIModel {
 	t.Helper()
 
@@ -648,6 +803,16 @@ func newPodsUIModelForSelectionTest(t *testing.T) *PodsUIModel {
 	// Use a wide terminal so the right-column popup path is active.
 	uiModel.width = 160
 
+	addSelectionTestNode(uiModel)
+
+	for _, name := range []string{"api-0", "worker-0"} {
+		addTestSelectionPod(uiModel, "default", name)
+	}
+
+	return uiModel
+}
+
+func addSelectionTestNode(uiModel *PodsUIModel) {
 	node := NewNode(&v1.Node{
 		ObjectMeta: metav1.ObjectMeta{Name: "node-a"},
 		Status: v1.NodeStatus{
@@ -656,12 +821,6 @@ func newPodsUIModelForSelectionTest(t *testing.T) *PodsUIModel {
 	})
 	node.Show()
 	uiModel.Cluster().AddNode(node)
-
-	for _, name := range []string{"api-0", "worker-0"} {
-		addTestSelectionPod(uiModel, "default", name)
-	}
-
-	return uiModel
 }
 
 func addTestSelectionPod(uiModel *PodsUIModel, namespace string, name string) {

@@ -137,6 +137,53 @@ func TestNodeDetailsRenderOnlyInDetailedMode(t *testing.T) {
 	}
 }
 
+func TestWideLayoutRendersMultiplePodColumns(t *testing.T) {
+	style, err := ParseStyle("#04B575,#FFFF00,#FF0000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	uiModel := NewPodsUIModel("name=asc", style)
+	uiModel.width = 320
+	uiModel.height = 24
+	uiModel.SetContextName("prod-cluster")
+	uiModel.SetNamespace("default")
+
+	node := NewNode(&v1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "node-a"},
+		Status:     v1.NodeStatus{Allocatable: v1.ResourceList{v1.ResourceCPU: resource.MustParse("4")}},
+	})
+	node.Show()
+	uiModel.Cluster().AddNode(node)
+
+	for i := 0; i < 18; i++ {
+		pod := NewPod(&v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: fmt.Sprintf("api-%02d", i)},
+			Spec: v1.PodSpec{
+				NodeName: "node-a",
+				Containers: []v1.Container{{
+					Name:      "app",
+					Resources: v1.ResourceRequirements{Requests: v1.ResourceList{v1.ResourceCPU: resource.MustParse("250m")}},
+				}},
+			},
+			Status: v1.PodStatus{Phase: v1.PodRunning},
+		})
+		pod.SetUsage(v1.ResourceList{v1.ResourceCPU: resource.MustParse("100m")})
+		uiModel.Cluster().AddPod(pod)
+	}
+
+	out := uiModel.View()
+	for _, want := range []string{"api-00", "api-06", "api-10"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("wide multi-column view missing %q\n%s", want, out)
+		}
+	}
+	for i, line := range strings.Split(out, "\n") {
+		if w := ansi.StringWidth(line); w > uiModel.width+2 {
+			t.Fatalf("line %d wider than terminal (%d > %d): %q", i, w, uiModel.width+2, line)
+		}
+	}
+}
+
 // TestPopupOverlay verifies the action popup floats over the pod list without
 // changing the total line count (sidebar stays fully visible alongside it).
 func TestPopupOverlay(t *testing.T) {
@@ -218,5 +265,65 @@ func TestPopupOverlay(t *testing.T) {
 
 	if testing.Verbose() {
 		fmt.Println(outWithPopup)
+	}
+}
+
+func TestPopupOverlayStaysInLeftPaneForMultiColumnLayout(t *testing.T) {
+	style, err := ParseStyle("#04B575,#FFFF00,#FF0000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	uiModel := NewPodsUIModel("name=asc", style)
+	uiModel.width = 320
+	uiModel.height = 20
+	uiModel.SetContextName("prod-cluster")
+	uiModel.SetNamespace("staging")
+
+	node := NewNode(&v1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "node-a"},
+		Status: v1.NodeStatus{
+			Allocatable: v1.ResourceList{
+				v1.ResourceCPU:    resource.MustParse("4"),
+				v1.ResourceMemory: resource.MustParse("8Gi"),
+			},
+		},
+	})
+	node.Show()
+	uiModel.Cluster().AddNode(node)
+
+	for i := 0; i < 18; i++ {
+		pod := NewPod(&v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: fmt.Sprintf("api-%02d", i)},
+			Spec: v1.PodSpec{
+				NodeName: "node-a",
+				Containers: []v1.Container{{
+					Name: "app",
+					Resources: v1.ResourceRequirements{
+						Requests: v1.ResourceList{v1.ResourceCPU: resource.MustParse("250m"), v1.ResourceMemory: resource.MustParse("256Mi")},
+					},
+				}},
+			},
+			Status: v1.PodStatus{Phase: v1.PodRunning},
+		})
+		pod.SetUsage(v1.ResourceList{v1.ResourceCPU: resource.MustParse("100m"), v1.ResourceMemory: resource.MustParse("64Mi")})
+		uiModel.Cluster().AddPod(pod)
+	}
+
+	uiModel.Update(tea.KeyMsg{Type: tea.KeyRight})
+	uiModel.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	outWithPopup := uiModel.View()
+	if !strings.Contains(outWithPopup, "POD ACTIONS") {
+		t.Fatalf("popup missing POD ACTIONS title")
+	}
+	if !strings.Contains(outWithPopup, "NODE PRESSURE") || !strings.Contains(outWithPopup, "HIGHLIGHTS") {
+		t.Fatalf("sidebar missing while popup is open\n%s", outWithPopup)
+	}
+
+	uiModel.actionMenuOpen = false
+	outWithout := uiModel.View()
+	uiModel.actionMenuOpen = true
+	if strings.Count(outWithPopup, "\n") != strings.Count(outWithout, "\n") {
+		t.Fatalf("popup changed line count in multi-column mode")
 	}
 }
