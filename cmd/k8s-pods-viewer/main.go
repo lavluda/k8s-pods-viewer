@@ -27,6 +27,7 @@ import (
 
 	"github.com/lavluda/k8s-pods-viewer/pkg/client"
 	"github.com/lavluda/k8s-pods-viewer/pkg/model"
+	"github.com/lavluda/k8s-pods-viewer/pkg/pricing/awsprice"
 )
 
 //go:generate cp ../../ATTRIBUTION.md ./ATTRIBUTION.md
@@ -80,6 +81,10 @@ func main() {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	if flags.Cost {
+		m.SetPricing(awsprice.New(ctx, flags.AWSProfile))
+	}
 
 	controller := client.NewPodsController(cs, metricsClient, m, runtime.nodeSelector, runtime.podSelector, runtime.namespace)
 	controller.Start(ctx)

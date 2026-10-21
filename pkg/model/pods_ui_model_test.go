@@ -22,6 +22,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -876,5 +877,36 @@ func addFillerBackgroundForPopupTest(t *testing.T, uiModel *PodsUIModel) {
 			Status: v1.PodStatus{Phase: v1.PodRunning},
 		})
 		uiModel.Cluster().AddPod(p)
+	}
+}
+
+func TestFooterPagingChipIsNotDuplicated(t *testing.T) {
+	style, err := ParseStyle("#04B575,#FFFF00,#FF0000")
+	if err != nil {
+		t.Fatalf("ParseStyle() error = %v", err)
+	}
+
+	uiModel := NewPodsUIModel("name=asc", style)
+	uiModel.width = 320
+	uiModel.height = 24
+	addSelectionTestNode(uiModel)
+	for i := 0; i < 18; i++ {
+		addTestSelectionPod(uiModel, "default", fmt.Sprintf("api-%02d", i))
+	}
+	if !uiModel.isMultiColumnState(uiModel.buildPodListState()) {
+		t.Fatalf("test setup did not produce a multi-column layout")
+	}
+
+	var footer strings.Builder
+	uiModel.writeFooter(&footer)
+	got := ansi.Strip(footer.String())
+
+	if n := strings.Count(got, "page"); n != 1 {
+		t.Fatalf("footer has %d \"page\" labels, want 1: %q", n, got)
+	}
+	for _, key := range []string{"pgup/dn", "[/]"} {
+		if !strings.Contains(got, key) {
+			t.Fatalf("footer is missing paging key %q: %q", key, got)
+		}
 	}
 }

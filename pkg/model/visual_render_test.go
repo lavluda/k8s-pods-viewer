@@ -125,8 +125,10 @@ func TestNodeDetailsRenderOnlyInDetailedMode(t *testing.T) {
 	node.Show()
 	uiModel.Cluster().AddNode(node)
 
-	if got := uiModel.View(); strings.Contains(got, "t3.medium") {
-		t.Fatalf("compact View() unexpectedly contains node details")
+	// The node pressure rows stay compact; instance metadata lives in the
+	// platform node panel instead, which renders in both modes.
+	if got := uiModel.View(); strings.Contains(got, "pool workers") {
+		t.Fatalf("compact View() unexpectedly contains node pressure details")
 	}
 	uiModel.showDetails = true
 	got := uiModel.View()

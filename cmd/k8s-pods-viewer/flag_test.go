@@ -99,6 +99,56 @@ func TestParseFlagsDefaults(t *testing.T) {
 	if flags.AltScreen {
 		t.Fatalf("AltScreen = true, want false")
 	}
+	if flags.Cost {
+		t.Fatalf("Cost = true, want false")
+	}
+}
+
+func TestParseFlagsCostCanBeEnabled(t *testing.T) {
+	t.Run("config file enables", func(t *testing.T) {
+		withTestConfigPath(t, "cost = true\n")
+		unsetEnv(t, "KUBECONFIG")
+		unsetEnv(t, "AWS_PROFILE")
+		withArgs(t)
+
+		flags, err := ParseFlags()
+		if err != nil {
+			t.Fatalf("ParseFlags() error = %v", err)
+		}
+		if !flags.Cost {
+			t.Fatalf("Cost = false, want true")
+		}
+	})
+
+	t.Run("flag enables", func(t *testing.T) {
+		withTestConfigPath(t, "")
+		unsetEnv(t, "KUBECONFIG")
+		unsetEnv(t, "AWS_PROFILE")
+		withArgs(t, "--cost")
+
+		flags, err := ParseFlags()
+		if err != nil {
+			t.Fatalf("ParseFlags() error = %v", err)
+		}
+		if !flags.Cost {
+			t.Fatalf("Cost = false, want true")
+		}
+	})
+
+	t.Run("flag overrides config", func(t *testing.T) {
+		withTestConfigPath(t, "cost = true\n")
+		unsetEnv(t, "KUBECONFIG")
+		unsetEnv(t, "AWS_PROFILE")
+		withArgs(t, "--cost=false")
+
+		flags, err := ParseFlags()
+		if err != nil {
+			t.Fatalf("ParseFlags() error = %v", err)
+		}
+		if flags.Cost {
+			t.Fatalf("Cost = true, want false")
+		}
+	})
 }
 
 func TestParseFlagsConfigFile(t *testing.T) {

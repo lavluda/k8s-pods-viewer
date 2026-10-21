@@ -39,6 +39,8 @@ type Node struct {
 type NodeDetails struct {
 	Platform         string
 	InstanceType     string
+	InstanceID       string
+	ImageID          string
 	Region           string
 	Zone             string
 	Pool             string
@@ -90,6 +92,8 @@ func (n *Node) Details() NodeDetails {
 	details := NodeDetails{
 		Platform:         nodePlatform(labels, n.node.Spec.ProviderID),
 		InstanceType:     firstNonEmpty(labels["node.kubernetes.io/instance-type"], labels["beta.kubernetes.io/instance-type"]),
+		InstanceID:       providerInstanceID(n.node.Spec.ProviderID),
+		ImageID:          firstNonEmpty(labels["eks.amazonaws.com/nodegroup-image"], labels["node.kubernetes.io/image-id"]),
 		Region:           firstNonEmpty(labels["topology.kubernetes.io/region"], labels["failure-domain.beta.kubernetes.io/region"]),
 		Zone:             firstNonEmpty(labels["topology.kubernetes.io/zone"], labels["failure-domain.beta.kubernetes.io/zone"]),
 		Pool:             nodePool(labels),
@@ -112,6 +116,16 @@ func nodePlatform(labels map[string]string, providerID string) string {
 	case labels["kubernetes.azure.com/agentpool"] != "":
 		return "AKS"
 	case labels["karpenter.sh/nodepool"] != "" || labels["karpenter.sh/provisioner-name"] != "":
+		// Karpenter runs on top of a cloud provider, so prefer the provider the
+		// machine actually came from when the provider ID says which one it is.
+		switch {
+		case strings.HasPrefix(providerID, "aws://"):
+			return "EKS"
+		case strings.HasPrefix(providerID, "gce://"):
+			return "GKE"
+		case strings.HasPrefix(providerID, "azure://"):
+			return "AKS"
+		}
 		return "Karpenter"
 	case strings.HasPrefix(providerID, "aws://"):
 		return "AWS"
@@ -122,6 +136,21 @@ func nodePlatform(labels map[string]string, providerID string) string {
 	default:
 		return "Kubernetes"
 	}
+}
+
+// providerInstanceID extracts the machine identifier from a Kubernetes provider
+// ID such as `aws:///us-east-1a/i-0abc123`, `gce://project/zone/name`, or an
+// Azure resource path. Providers all encode the machine as the last segment.
+func providerInstanceID(providerID string) string {
+	if providerID == "" {
+		return ""
+	}
+	_, path, found := strings.Cut(providerID, "://")
+	if !found {
+		return ""
+	}
+	segments := strings.Split(strings.Trim(path, "/"), "/")
+	return segments[len(segments)-1]
 }
 
 func nodePool(labels map[string]string) string {
@@ -144,7 +173,8 @@ func nodeCapacityType(labels map[string]string) string {
 	if capacityType == "" && labels["cloud.google.com/gke-spot"] == "true" {
 		capacityType = "spot"
 	}
-	return strings.ToLower(capacityType)
+	// EKS reports `ON_DEMAND`; normalize to the `on-demand` wording used in the UI.
+	return strings.ReplaceAll(strings.ToLower(capacityType), "_", "-")
 }
 
 func (n *Node) BindPod(pod *Pod) {

@@ -52,7 +52,8 @@ expect_success "version with combined parse-only flags" \
   --pod-selector app=api \
   --pod-sort creation=asc \
   --resources memory,cpu \
-  --style '#04B575,#FFFF00,#FF0000'
+  --style '#04B575,#FFFF00,#FF0000' \
+  --cost
 
 expect_failure_contains "invalid style rejected before client startup" "creating style:" \
   go run ./cmd/k8s-pods-viewer \

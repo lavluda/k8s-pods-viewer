@@ -14,7 +14,7 @@ It is designed for the common questions behind noisy clusters: which pods are us
 brew install lavluda/tap/k8s-pods-viewer
 ```
 
-Latest release notes: [v1.5.0](docs/releases/v1.5.0.md).
+Latest release notes: [v1.6.0](docs/releases/v1.6.0.md).
 
 ## Preview
 
@@ -39,11 +39,17 @@ Latest release notes: [v1.5.0](docs/releases/v1.5.0.md).
 - Compact node aliases with a detailed info toggle for optional instance type,
   region/zone, node pool, capacity type, OS, architecture, kubelet, and runtime metadata
 - A right-side node panel with per-node CPU and memory usage
+- A platform-aware node metadata panel beside the pod list, titled for the detected
+  platform (`EKS Nodes`, `GKE Nodes`, `AKS Nodes`, or `Node Fleet` on unmanaged
+  clusters), with per-node instance type, capacity type, zone, and node group plus
+  cluster-wide rollups
 - A top dashboard header with context, cluster summary, and keyboard shortcuts
 - A right-side highlights rail for hot pods, restart visibility, and cluster watch status
 - Direct initial pod/node fetch before watches start, so the UI can render immediately
 - Recovery-friendly watch status reporting instead of crashing the TUI on informer/poller failures
 - Cluster-level CPU and memory summary at the top
+- A cluster running-cost tile beside `Cluster Memory` with live AWS on-demand and
+  spot prices for the visible nodes (off by default; `--cost` to enable)
 - Filters for namespace, pod labels, and node labels
 
 By default the screen refreshes every `2s`.
@@ -61,6 +67,50 @@ The UI intentionally shows two different kinds of numbers:
 
 For pods, the baseline is usually the limit when present, and falls back to the request when there is no limit. That means a pod line can show `500m/1200m` while the bar itself is still based on actual live usage from the metrics API.
 
+## Platform Node Metadata
+
+The node metadata panel adapts to the cluster it is pointed at:
+
+- The platform is detected from the nodes themselves (`eks.amazonaws.com/*`,
+  `cloud.google.com/gke-*`, `kubernetes.azure.com/*`, `karpenter.sh/*`, and the
+  node `providerID`), so the panel title and the node group wording match the
+  provider. A Karpenter node on an AWS provider ID still reads as `EKS`.
+- Columns are only drawn when at least one node has a value for them. On EKS that
+  means instance type, capacity type, zone, and nodegroup. On a `kind` or
+  bare-metal cluster the same panel falls back to os/arch and kubelet.
+- The rollup section under the table shows the fleet distribution: nodegroups,
+  on-demand vs spot, instance types, zones, and kubelet versions.
+- `i` (detailed info) adds the EC2/VM machine ID column and region, arch, AMI/image,
+  OS image, and container runtime rollups.
+- Everything comes from the Kubernetes node objects. No cloud API calls are made,
+  so no AWS, GCP, or Azure credentials are needed.
+- When the sidebar runs short of vertical space the panel drops its rollup first,
+  then trims rows and reports the remainder as `+N more nodes`.
+
+## Cluster Cost
+
+The `Cluster Cost` tile sits beside `Cluster Memory` and shows what the visible
+nodes cost to keep running:
+
+- The big number is the summed hourly price of the nodes, and the sub-line is the
+  monthly projection (`hourly × 730`) plus how many nodes were priced.
+- On-demand prices come from the AWS Pricing API (`GetProducts`), matched on
+  instance type, region, OS, shared tenancy, and used capacity status.
+- Spot nodes are priced from the most recent EC2 spot price for their exact
+  availability zone (`DescribeSpotPriceHistory`). Until that sample arrives, the
+  node is charged at its on-demand rate, which is the ceiling of what it can cost.
+- Prices are fetched in the background with the local AWS credentials (honoring
+  `--aws-profile`), cached in memory, and never block the UI. On-demand prices
+  refresh every 12 hours, spot prices every 10 minutes.
+- Only AWS-backed nodes are priced. Other platforms show `n/a · no priced platform`
+  instead of sending unknown instance types to the AWS API.
+- When credentials or permissions are missing, the tile shows `n/a` with a short
+  reason such as `no AWS credentials` or `pricing access denied`.
+- The tile covers node compute only. Control-plane fees, EBS volumes, load
+  balancers, snapshots, and data transfer are not included.
+- Off by default. Pass `--cost` (or set `cost=true` in the config file) to show
+  the tile and fetch AWS prices. Omit the flag / set `cost=false` to keep it off.
+
 ## Health Semantics
 
 - `Running` and ready pods are healthy
@@ -76,6 +126,9 @@ For pods, the baseline is usually the limit when present, and falls back to the 
 - Optional permission to `list/watch` `nodes` for node pressure and node filtering
 - Optional permission to read pod metrics from `metrics.k8s.io` for live usage
 - A working `metrics.k8s.io` provider, typically Metrics Server
+- Optional AWS credentials with `pricing:GetProducts` and
+  `ec2:DescribeSpotPriceHistory` for the cluster cost tile (read-only; only used
+  when cost is enabled with `--cost` / `cost=true`)
 
 Cluster-admin access is not required. If node access is forbidden, the viewer continues
 in pod-only mode. If pod metrics are unavailable, the viewer continues without live
@@ -198,6 +251,7 @@ pod-sort=cpu=dsc
 resources=cpu,memory
 style=#04B575,#FFFF00,#FF0000
 alt-screen=false
+cost=false
 ```
 
 CLI flags override config file values.
@@ -227,6 +281,9 @@ CLI flags override config file values.
     Three colors for styling 'good', 'ok' and 'bad' values
 -alt-screen
     Run in the terminal alternate screen buffer
+-cost
+    Show the cluster running cost tile (off by default). Uses read-only AWS Pricing
+    and EC2 spot price APIs with the local credentials; pass --cost to enable
 -v, -version
     Display k8s-pods-viewer version
 ```

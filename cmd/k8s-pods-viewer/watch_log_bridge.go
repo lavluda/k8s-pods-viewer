@@ -15,6 +15,7 @@ limitations under the License.
 package main
 
 import (
+	goflag "flag"
 	"strings"
 	"time"
 
@@ -49,6 +50,16 @@ func (b *watchLogBridge) Write(p []byte) (int, error) {
 
 func configureClientLogging(uiModel *model.PodsUIModel) {
 	bridge := newWatchLogBridge(uiModel)
+
+	// klog honors -stderrthreshold (default ERROR) independently of
+	// -logtostderr, so without raising it client-go's reflector errors
+	// (e.g. "Failed to watch"/"Failed to list") still get written straight
+	// to os.Stderr and corrupt the Bubble Tea alt-screen. Route everything
+	// through the bridge instead.
+	fs := goflag.NewFlagSet("klog", goflag.ContinueOnError)
+	klog.InitFlags(fs)
+	_ = fs.Set("stderrthreshold", "FATAL")
+
 	klog.LogToStderr(false)
 	for _, severity := range []string{"INFO", "WARNING", "ERROR", "FATAL"} {
 		klog.SetOutputBySeverity(severity, bridge)

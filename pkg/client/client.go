@@ -45,18 +45,17 @@ func NewMetrics(kubeconfig, context string) (*metricsclientset.Clientset, error)
 }
 
 func ResolveContextName(kubeconfig, context string) string {
+	if strings.TrimSpace(context) != "" {
+		return context
+	}
+	// RawConfig ignores the CurrentContext override, so it only reflects
+	// the kubeconfig file's own current-context when no override is given.
 	config, err := clientConfig(kubeconfig, context).RawConfig()
 	if err != nil {
-		if strings.TrimSpace(context) != "" {
-			return context
-		}
 		return "current"
 	}
 	if strings.TrimSpace(config.CurrentContext) != "" {
 		return config.CurrentContext
-	}
-	if strings.TrimSpace(context) != "" {
-		return context
 	}
 	return "current"
 }

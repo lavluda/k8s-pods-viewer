@@ -31,6 +31,8 @@ import (
 	"github.com/facette/natsort"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+
+	"github.com/lavluda/k8s-pods-viewer/pkg/pricing"
 )
 
 // Direction B — "Paneled Console" palette. Soft-bordered panels on a near-black
@@ -82,6 +84,11 @@ const (
 const (
 	podsTickInterval         = 2 * time.Second
 	podAutoSortKeyboardPause = 30 * time.Second
+
+	// podsChromeLines approximates the rows that live outside the two panes:
+	// the header band (logo + KPI strip ≈ 7 lines) plus the footer (paginator
+	// dots and shortcut chips ≈ 3 lines).
+	podsChromeLines = 10
 )
 
 type podGroup struct {
@@ -128,6 +135,7 @@ type PodsUIModel struct {
 	podOrder            []objectKey
 	autoSortPausedUntil time.Time
 	style               *Style
+	pricing             pricing.Provider
 	resources           []v1.ResourceName
 	contextName         string
 	namespace           string
@@ -397,6 +405,19 @@ func (u *PodsUIModel) renderKpiStrip(stats Stats, visiblePods []*Pod, filteredPo
 		})
 	}
 
+	// Cost sits beside the cluster resource tiles; it is omitted entirely when no
+	// price provider is configured.
+	if u.pricing != nil {
+		cost := u.clusterCost(stats.Nodes)
+		value := "n/a"
+		fg := podsSurfaceDim
+		if cost.Known() {
+			value = formatHourlyUSD(cost.HourlyUSD)
+			fg = lipgloss.Color(u.style.greenHex)
+		}
+		specs = append(specs, kpiSpec{"CLUSTER COST", value, cost.costSubLine(), fg})
+	}
+
 	n := len(specs)
 	if n == 0 {
 		return ""
@@ -544,8 +565,9 @@ func (u *PodsUIModel) writeFooter(w io.Writer) {
 	if u.isMultiColumnState(u.buildPodListState()) {
 		chips = append(chips,
 			struct{ key, label string }{"←→", "cols"},
-			struct{ key, label string }{"pgup/dn", "page"},
-			struct{ key, label string }{"[/]", "page"},
+			// pgup/pgdn and [/] are the same action, so they share one chip
+			// instead of rendering two identically labelled "page" chips.
+			struct{ key, label string }{"pgup/dn · [/]", "page"},
 		)
 	} else {
 		chips = append(chips, struct{ key, label string }{"←→", "page"})
@@ -938,7 +960,24 @@ func (u *PodsUIModel) combineWithNodeUsagePanel(left string, nodes []*Node, pods
 		nodeSection = u.renderNodeUsagePlaceholder(rightWidth, u.cluster.NodeDataAvailable())
 	}
 	right := strings.TrimRight(nodeSection+"\n"+u.renderSignalsPanel(nodes, pods, filteredPods, rightWidth), "\n")
+	if fleetSection := u.renderNodeFleetPanel(
+		BuildNodeFleet(nodes, nodeAliases),
+		rightWidth,
+		u.nodeFleetLineBudget(left, right),
+	); fleetSection != "" {
+		right = strings.TrimRight(right+"\n"+fleetSection, "\n")
+	}
 	return sideBySideFixed(left, right, u.leftPaneWidth(), rightWidth, 3)
+}
+
+// nodeFleetLineBudget is how many lines the fleet panel may add before the
+// sidebar grows taller than the pod list and pushes the footer off screen.
+func (u *PodsUIModel) nodeFleetLineBudget(left string, right string) int {
+	available := lipgloss.Height(left)
+	if reserved := u.height - podsChromeLines; reserved > available {
+		available = reserved
+	}
+	return available - lipgloss.Height(right)
 }
 
 func (u *PodsUIModel) renderNodeUsagePanel(nodes []*Node, pods []*Pod, nodeAliases map[string]string, width int) string {
