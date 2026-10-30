@@ -16,6 +16,7 @@ package model
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"sort"
 	"strconv"
@@ -689,13 +690,21 @@ func (u *PodsUIModel) startPodAction(action podActionKind, pod *Pod, container s
 
 func (u *PodsUIModel) kubectlArgs(args ...string) []string {
 	prefix := []string{}
-	if u.kubeconfig != "" {
-		prefix = append(prefix, "--kubeconfig", u.kubeconfig)
-	}
 	if u.kubeContext != "" {
 		prefix = append(prefix, "--context", u.kubeContext)
 	}
 	return append(prefix, args...)
+}
+
+// kubectl builds the child command. The kubeconfig goes through the KUBECONFIG
+// environment variable rather than --kubeconfig because the flag takes a single
+// file while the viewer accepts the same path list the env var does.
+func (u *PodsUIModel) kubectl(args ...string) *exec.Cmd {
+	cmd := exec.Command("kubectl", args...)
+	if u.kubeconfig != "" {
+		cmd.Env = append(os.Environ(), "KUBECONFIG="+u.kubeconfig)
+	}
+	return cmd
 }
 
 func containerFlag(container string) []string {
@@ -707,7 +716,7 @@ func containerFlag(container string) []string {
 
 func (u *PodsUIModel) fetchKubectlOutputCmd(title string, args []string) tea.Cmd {
 	return func() tea.Msg {
-		cmd := exec.Command("kubectl", args...)
+		cmd := u.kubectl(args...)
 		output, err := cmd.CombinedOutput()
 		body := strings.TrimRight(string(output), "\n")
 		if body == "" && err == nil {
@@ -726,7 +735,7 @@ func (u *PodsUIModel) execKubectlCmd(pod *Pod, container string) tea.Cmd {
 	args = append(args, containerFlag(container)...)
 	args = append(args, "--", "sh")
 
-	cmd := exec.Command("kubectl", args...)
+	cmd := u.kubectl(args...)
 	return tea.ExecProcess(cmd, func(err error) tea.Msg {
 		return podExecFinishedMsg{err: err}
 	})
@@ -734,7 +743,7 @@ func (u *PodsUIModel) execKubectlCmd(pod *Pod, container string) tea.Cmd {
 
 func (u *PodsUIModel) mutateKubectlCmd(successStatus string, actionLabel string, args []string) tea.Cmd {
 	return func() tea.Msg {
-		cmd := exec.Command("kubectl", args...)
+		cmd := u.kubectl(args...)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			body := strings.TrimSpace(string(output))
@@ -759,7 +768,7 @@ func (u *PodsUIModel) scaleWorkloadCmd(pod *Pod, delta int) tea.Cmd {
 	namespace := pod.Namespace()
 	return func() tea.Msg {
 		getArgs := u.kubectlArgs("get", workloadRef, "-n", namespace, "-o", "jsonpath={.spec.replicas}")
-		getCmd := exec.Command("kubectl", getArgs...)
+		getCmd := u.kubectl(getArgs...)
 		currentOutput, err := getCmd.CombinedOutput()
 		if err != nil {
 			body := strings.TrimSpace(string(currentOutput))
@@ -785,7 +794,7 @@ func (u *PodsUIModel) scaleWorkloadCmd(pod *Pod, delta int) tea.Cmd {
 		}
 
 		scaleArgs := u.kubectlArgs("scale", workloadRef, "-n", namespace, fmt.Sprintf("--replicas=%d", targetReplicas))
-		scaleCmd := exec.Command("kubectl", scaleArgs...)
+		scaleCmd := u.kubectl(scaleArgs...)
 		scaleOutput, err := scaleCmd.CombinedOutput()
 		if err != nil {
 			body := strings.TrimSpace(string(scaleOutput))

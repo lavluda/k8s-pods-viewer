@@ -165,7 +165,16 @@ func (p *Pod) Health() PodHealth {
 	p.mu.RUnlock()
 	ready, readyKnown := podReadyCondition(conditions)
 
-	for _, status := range append(initStatuses, containerStatuses...) {
+	statuses := make([]v1.ContainerStatus, 0, len(initStatuses)+len(containerStatuses))
+	for _, status := range initStatuses {
+		// A finished init container is the normal case, not a warning.
+		if terminated := status.State.Terminated; terminated != nil && terminated.ExitCode == 0 {
+			continue
+		}
+		statuses = append(statuses, status)
+	}
+	statuses = append(statuses, containerStatuses...)
+	for _, status := range statuses {
 		if waiting := status.State.Waiting; waiting != nil {
 			label := shortStatusReason(waiting.Reason)
 			if isCriticalReason(waiting.Reason) {

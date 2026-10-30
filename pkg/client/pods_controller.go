@@ -184,7 +184,7 @@ func (m PodsController) startNodeWatch(ctx context.Context, cluster *model.Clust
 					if !ok || n == nil {
 						panic(fmt.Sprintf("unexpected node delete object %T", obj))
 					}
-					cluster.DeleteNode(nodeKey(n))
+					cluster.DeleteNode(n.Name)
 				})
 			},
 			UpdateFunc: func(_, newObj interface{}) {
@@ -194,9 +194,9 @@ func (m PodsController) startNodeWatch(ctx context.Context, cluster *model.Clust
 						panic(fmt.Sprintf("unexpected node update object %T", newObj))
 					}
 					if !n.DeletionTimestamp.IsZero() && len(n.Finalizers) == 0 {
-						cluster.DeleteNode(nodeKey(n))
+						cluster.DeleteNode(n.Name)
 					} else {
-						node, ok := cluster.GetNode(nodeKey(n))
+						node, ok := cluster.GetNodeByName(n.Name)
 						if ok {
 							node.Update(n)
 							node.Show()
@@ -343,13 +343,6 @@ func (m PodsController) refreshPodMetrics(ctx context.Context, cluster *model.Cl
 		pod.SetUsage(usage)
 	}
 	return nil
-}
-
-func nodeKey(node *v1.Node) string {
-	if id := node.Spec.ProviderID; id != "" {
-		return id
-	}
-	return "name://" + node.Name
 }
 
 func isTerminalPod(p *v1.Pod) bool {

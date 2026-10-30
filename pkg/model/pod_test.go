@@ -216,3 +216,31 @@ func TestPodHealthRunningNotReadyWarns(t *testing.T) {
 		t.Fatalf("severity = %v, want %v", got, want)
 	}
 }
+
+func TestPodHealthIgnoresCompletedInitContainer(t *testing.T) {
+	pod := testPod("default", "mypod")
+	pod.Status.Phase = v1.PodRunning
+	pod.Status.Conditions = []v1.PodCondition{{Type: v1.PodReady, Status: v1.ConditionTrue}}
+	pod.Status.InitContainerStatuses = []v1.ContainerStatus{{
+		Name:  "init",
+		State: v1.ContainerState{Terminated: &v1.ContainerStateTerminated{ExitCode: 0, Reason: "Completed"}},
+	}}
+	pod.Status.ContainerStatuses = []v1.ContainerStatus{{
+		Name:  "app",
+		Ready: true,
+		State: v1.ContainerState{Running: &v1.ContainerStateRunning{}},
+	}}
+
+	health := model.NewPod(pod).Health()
+	if got, want := health.Severity, model.PodHealthHealthy; got != want {
+		t.Fatalf("severity = %v (%s), want %v", got, health.Label, want)
+	}
+
+	// A failed init container is still a problem.
+	pod.Status.Phase = v1.PodPending
+	pod.Status.InitContainerStatuses[0].State.Terminated.ExitCode = 1
+	pod.Status.InitContainerStatuses[0].State.Terminated.Reason = "Error"
+	if got := model.NewPod(pod).Health().Severity; got != model.PodHealthCritical {
+		t.Fatalf("failed init container severity = %v, want critical", got)
+	}
+}

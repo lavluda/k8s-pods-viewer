@@ -52,20 +52,21 @@ func (c *Cluster) NodeDataAvailable() bool {
 func (c *Cluster) AddNode(node *Node) *Node {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	nodeKey := makeNodeKey(node.ProviderID(), node.Name())
-	if existing, ok := c.nodes[nodeKey]; ok {
+	// Nodes are keyed by name: providerID can be empty at registration and
+	// filled in later, which would strand the node under a stale key.
+	if existing, ok := c.nodes[node.Name()]; ok {
 		existing.Update(&node.node)
 		return existing
 	}
 
-	c.nodes[nodeKey] = node
+	c.nodes[node.Name()] = node
 	return node
 }
 
-func (c *Cluster) DeleteNode(providerID string) {
+func (c *Cluster) DeleteNode(name string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	n, ok := c.nodes[providerID]
+	n, ok := c.nodes[name]
 	if !ok {
 		return
 	}
@@ -78,7 +79,7 @@ func (c *Cluster) DeleteNode(providerID string) {
 	for _, k := range podsToDelete {
 		delete(c.pods, k)
 	}
-	delete(c.nodes, providerID)
+	delete(c.nodes, name)
 }
 
 func (c *Cluster) ForEachNode(f func(n *Node)) {
@@ -97,22 +98,11 @@ func (c *Cluster) ForEachPod(f func(p *Pod)) {
 	}
 }
 
-func (c *Cluster) GetNode(providerID string) (*Node, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	n, ok := c.nodes[providerID]
-	return n, ok
-}
-
 func (c *Cluster) GetNodeByName(name string) (*Node, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	for _, n := range c.nodes {
-		if n.node.Name == name {
-			return n, true
-		}
-	}
-	return nil, false
+	n, ok := c.nodes[name]
+	return n, ok
 }
 
 func (c *Cluster) AddPod(pod *Pod) (totalPods int) {
@@ -207,12 +197,11 @@ func (c *Cluster) Stats() Stats {
 }
 
 func (c *Cluster) visibleNodeForNameLocked(nodeName string) (bool, bool) {
-	for _, n := range c.nodes {
-		if n.Name() == nodeName {
-			return n.Visible(), true
-		}
+	n, ok := c.nodes[nodeName]
+	if !ok {
+		return false, false
 	}
-	return false, false
+	return n.Visible(), true
 }
 
 // addResources sets lhs = lhs + rhs
@@ -222,11 +211,4 @@ func addResources(lhs v1.ResourceList, rhs v1.ResourceList) {
 		existing.Add(q)
 		lhs[rn] = existing
 	}
-}
-
-func makeNodeKey(providerID, nodeName string) string {
-	if providerID != "" {
-		return providerID
-	}
-	return "name://" + nodeName
 }

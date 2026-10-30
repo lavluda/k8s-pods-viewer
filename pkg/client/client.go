@@ -15,6 +15,7 @@ limitations under the License.
 package client
 
 import (
+	"path/filepath"
 	"strings"
 
 	"k8s.io/client-go/kubernetes"
@@ -67,7 +68,8 @@ func getConfig(kubeconfig, context string) (*rest.Config, error) {
 
 func clientConfig(kubeconfig, context string) clientcmd.ClientConfig {
 	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		&clientcmd.ClientConfigLoadingRules{Precedence: strings.Split(kubeconfig, ":")},
+		// SplitList uses the OS list separator, so Windows paths like C:\... stay whole.
+		&clientcmd.ClientConfigLoadingRules{Precedence: filepath.SplitList(kubeconfig)},
 		&clientcmd.ConfigOverrides{CurrentContext: context},
 	)
 }

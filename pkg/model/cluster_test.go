@@ -63,27 +63,35 @@ func TestClusterAddNode(t *testing.T) {
 
 }
 
-func TestClusterGetNodeByProviderID(t *testing.T) {
+func TestClusterNodeSurvivesLateProviderID(t *testing.T) {
 	cluster := model.NewCluster()
 
-	_, ok := cluster.GetNode("mynode-id")
-	if ok {
-		t.Errorf("expected to not find node")
-	}
+	// Nodes register before the cloud controller fills in spec.providerID.
+	cluster.AddNode(model.NewNode(testNode("mynode")))
+
 	n := testNode("mynode")
-	n.Spec.ProviderID = "mynode-id"
-	node := model.NewNode(n)
-	cluster.AddNode(node)
+	n.Spec.ProviderID = "aws:///us-east-1a/i-0abc"
+	n.Status.Allocatable = v1.ResourceList{"cpu": resource.MustParse("4")}
+	cluster.AddNode(model.NewNode(n))
 
-	_, ok = cluster.GetNode("mynode-id")
+	count := 0
+	cluster.ForEachNode(func(*model.Node) { count++ })
+	if count != 1 {
+		t.Fatalf("expected 1 node after providerID update, got %d", count)
+	}
+	node, ok := cluster.GetNodeByName("mynode")
 	if !ok {
-		t.Errorf("expected to find node by provider id")
+		t.Fatal("expected to find node by name")
+	}
+	if got := node.ProviderID(); got != "aws:///us-east-1a/i-0abc" {
+		t.Errorf("ProviderID() = %q, want the updated value", got)
+	}
+	if got := node.Allocatable()["cpu"]; got.Cmp(resource.MustParse("4")) != 0 {
+		t.Errorf("allocatable cpu = %s, want 4", got.String())
 	}
 
-	// delete and we should fail to find it
-	cluster.DeleteNode("mynode-id")
-	_, ok = cluster.GetNode("mynode-id")
-	if ok {
+	cluster.DeleteNode("mynode")
+	if _, ok := cluster.GetNodeByName("mynode"); ok {
 		t.Errorf("expected to not find node after deletion")
 	}
 }
@@ -200,7 +208,7 @@ func TestClusterDeleteNodeDeletesPods(t *testing.T) {
 	}
 
 	// deleting the node should clear all of the usage of pods that were bound to the node
-	cluster.DeleteNode("mynode-id")
+	cluster.DeleteNode("mynode")
 
 	if got := cluster.Stats().TotalPods; got != 0 {
 		t.Errorf("expected 0 pods, got %d", got)
