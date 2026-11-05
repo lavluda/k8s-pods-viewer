@@ -8,3 +8,7 @@ coverage.out
 /.static
 /.tmp
 .DS_Store
+/.agents
+/.claude
+/docs/plans
+/openspec
