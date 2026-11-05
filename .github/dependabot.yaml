@@ -6,10 +6,15 @@ updates:
     groups:
       k8s-dependencies:
         patterns:
-        - "k8s.io*"
+        - "k8s.io/*"
         - "sigs.k8s.io/*"
       aws-dependencies:
         patterns:
         - "github.com/aws*"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
     schedule:
       interval: "weekly"

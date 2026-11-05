@@ -20,7 +20,8 @@ download: ## Download dependencies
 	go mod tidy
 
 licenses: download ## Check licenses
-	go-licenses check ./... --allowed_licenses=MIT,Apache-2.0,BSD-3-Clause,ISC \
+	@BIN=$$(command -v go-licenses 2>/dev/null || echo "$${GOBIN:-$$(go env GOPATH)/bin}/go-licenses"); \
+	"$$BIN" check ./... --allowed_licenses=MIT,Apache-2.0,BSD-3-Clause,ISC \
 	--ignore github.com/mattn/go-localereader # MIT
 
 boilerplate: ## Add license headers
