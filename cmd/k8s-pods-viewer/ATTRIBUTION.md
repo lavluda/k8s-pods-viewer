@@ -45,8 +45,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## github.com/aws/aws-sdk-go-v2
 
 * Name: github.com/aws/aws-sdk-go-v2
-* Version: v1.46.0
-* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/v1.46.0/LICENSE.txt)
+* Version: v1.47.6
+* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/v1.47.6/LICENSE.txt)
 
 ```
 
@@ -257,8 +257,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## github.com/aws/aws-sdk-go-v2/config
 
 * Name: github.com/aws/aws-sdk-go-v2/config
-* Version: v1.33.3
-* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/config/v1.33.3/config/LICENSE.txt)
+* Version: v1.33.14
+* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/config/v1.33.14/config/LICENSE.txt)
 
 ```
 
@@ -469,8 +469,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## github.com/aws/aws-sdk-go-v2/credentials
 
 * Name: github.com/aws/aws-sdk-go-v2/credentials
-* Version: v1.20.3
-* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/credentials/v1.20.3/credentials/LICENSE.txt)
+* Version: v1.20.14
+* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/credentials/v1.20.14/credentials/LICENSE.txt)
 
 ```
 
@@ -681,8 +681,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## github.com/aws/aws-sdk-go-v2/feature/ec2/imds
 
 * Name: github.com/aws/aws-sdk-go-v2/feature/ec2/imds
-* Version: v1.19.2
-* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/feature/ec2/imds/v1.19.2/feature/ec2/imds/LICENSE.txt)
+* Version: v1.20.6
+* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/feature/ec2/imds/v1.20.6/feature/ec2/imds/LICENSE.txt)
 
 ```
 
@@ -893,8 +893,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## github.com/aws/aws-sdk-go-v2/internal/configsources
 
 * Name: github.com/aws/aws-sdk-go-v2/internal/configsources
-* Version: v1.5.2
-* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/internal/configsources/v1.5.2/internal/configsources/LICENSE.txt)
+* Version: v1.5.9
+* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/internal/configsources/v1.5.9/internal/configsources/LICENSE.txt)
 
 ```
 
@@ -1105,8 +1105,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## github.com/aws/aws-sdk-go-v2/internal/endpoints/v2
 
 * Name: github.com/aws/aws-sdk-go-v2/internal/endpoints/v2
-* Version: v2.8.2
-* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/internal/endpoints/v2.8.2/internal/endpoints/v2/LICENSE.txt)
+* Version: v2.8.9
+* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/internal/endpoints/v2.8.9/internal/endpoints/v2/LICENSE.txt)
 
 ```
 
@@ -1317,8 +1317,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## github.com/aws/aws-sdk-go-v2/internal/sync/singleflight
 
 * Name: github.com/aws/aws-sdk-go-v2/internal/sync/singleflight
-* Version: v1.46.0
-* License: [BSD-3-Clause](https://github.com/aws/aws-sdk-go-v2/blob/v1.46.0/internal/sync/singleflight/LICENSE)
+* Version: v1.47.6
+* License: [BSD-3-Clause](https://github.com/aws/aws-sdk-go-v2/blob/v1.47.6/internal/sync/singleflight/LICENSE)
 
 ```
 Copyright (c) 2009 The Go Authors. All rights reserved.
@@ -1355,8 +1355,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## github.com/aws/aws-sdk-go-v2/internal/v4a
 
 * Name: github.com/aws/aws-sdk-go-v2/internal/v4a
-* Version: v1.5.2
-* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/internal/v4a/v1.5.2/internal/v4a/LICENSE.txt)
+* Version: v1.5.9
+* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/internal/v4a/v1.5.9/internal/v4a/LICENSE.txt)
 
 ```
 
@@ -1567,8 +1567,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## github.com/aws/aws-sdk-go-v2/service/ec2
 
 * Name: github.com/aws/aws-sdk-go-v2/service/ec2
-* Version: v1.329.0
-* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/service/ec2/v1.329.0/service/ec2/LICENSE.txt)
+* Version: v1.344.0
+* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/service/ec2/v1.344.0/service/ec2/LICENSE.txt)
 
 ```
 
@@ -1779,8 +1779,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding
 
 * Name: github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding
-* Version: v1.13.19
-* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/service/internal/accept-encoding/v1.13.19/service/internal/accept-encoding/LICENSE.txt)
+* Version: v1.13.24
+* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/service/internal/accept-encoding/v1.13.24/service/internal/accept-encoding/LICENSE.txt)
 
 ```
 
@@ -1991,8 +1991,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## github.com/aws/aws-sdk-go-v2/service/internal/presigned-url
 
 * Name: github.com/aws/aws-sdk-go-v2/service/internal/presigned-url
-* Version: v1.14.2
-* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/service/internal/presigned-url/v1.14.2/service/internal/presigned-url/LICENSE.txt)
+* Version: v1.14.9
+* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/service/internal/presigned-url/v1.14.9/service/internal/presigned-url/LICENSE.txt)
 
 ```
 
@@ -2203,8 +2203,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## github.com/aws/aws-sdk-go-v2/service/pricing
 
 * Name: github.com/aws/aws-sdk-go-v2/service/pricing
-* Version: v1.48.0
-* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/service/pricing/v1.48.0/service/pricing/LICENSE.txt)
+* Version: v1.51.3
+* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/service/pricing/v1.51.3/service/pricing/LICENSE.txt)
 
 ```
 
@@ -2415,8 +2415,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## github.com/aws/aws-sdk-go-v2/service/signin
 
 * Name: github.com/aws/aws-sdk-go-v2/service/signin
-* Version: v1.9.0
-* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/service/signin/v1.9.0/service/signin/LICENSE.txt)
+* Version: v1.12.2
+* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/service/signin/v1.12.2/service/signin/LICENSE.txt)
 
 ```
 
@@ -2627,8 +2627,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## github.com/aws/aws-sdk-go-v2/service/sso
 
 * Name: github.com/aws/aws-sdk-go-v2/service/sso
-* Version: v1.37.0
-* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/service/sso/v1.37.0/service/sso/LICENSE.txt)
+* Version: v1.39.2
+* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/service/sso/v1.39.2/service/sso/LICENSE.txt)
 
 ```
 
@@ -2839,8 +2839,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## github.com/aws/aws-sdk-go-v2/service/ssooidc
 
 * Name: github.com/aws/aws-sdk-go-v2/service/ssooidc
-* Version: v1.42.0
-* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/service/ssooidc/v1.42.0/service/ssooidc/LICENSE.txt)
+* Version: v1.44.2
+* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/service/ssooidc/v1.44.2/service/ssooidc/LICENSE.txt)
 
 ```
 
@@ -3051,8 +3051,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## github.com/aws/aws-sdk-go-v2/service/sts
 
 * Name: github.com/aws/aws-sdk-go-v2/service/sts
-* Version: v1.49.0
-* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/service/sts/v1.49.0/service/sts/LICENSE.txt)
+* Version: v1.51.7
+* License: [Apache-2.0](https://github.com/aws/aws-sdk-go-v2/blob/service/sts/v1.51.7/service/sts/LICENSE.txt)
 
 ```
 
@@ -3263,8 +3263,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## github.com/aws/smithy-go
 
 * Name: github.com/aws/smithy-go
-* Version: v1.28.1
-* License: [Apache-2.0](https://github.com/aws/smithy-go/blob/v1.28.1/LICENSE)
+* Version: v1.28.8
+* License: [Apache-2.0](https://github.com/aws/smithy-go/blob/v1.28.8/LICENSE)
 
 ```
 
@@ -3448,8 +3448,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## github.com/aws/smithy-go/internal/sync/singleflight
 
 * Name: github.com/aws/smithy-go/internal/sync/singleflight
-* Version: v1.28.1
-* License: [BSD-3-Clause](https://github.com/aws/smithy-go/blob/v1.28.1/internal/sync/singleflight/LICENSE)
+* Version: v1.28.8
+* License: [BSD-3-Clause](https://github.com/aws/smithy-go/blob/v1.28.8/internal/sync/singleflight/LICENSE)
 
 ```
 Copyright (c) 2009 The Go Authors. All rights reserved.
@@ -3480,6 +3480,43 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+
+```
+
+## github.com/aws/smithy-go/transport/http/protocol/internal/json/internal/stdlib
+
+* Name: github.com/aws/smithy-go/transport/http/protocol/internal/json/internal/stdlib
+* Version: v1.28.8
+* License: [BSD-3-Clause](https://github.com/aws/smithy-go/blob/v1.28.8/transport/http/protocol/internal/json/internal/stdlib/LICENSE)
+
+```
+Copyright (c) 2009 The Go Authors. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Google Inc. nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ```
 
@@ -3672,8 +3709,8 @@ SOFTWARE.
 ## github.com/charmbracelet/x/ansi
 
 * Name: github.com/charmbracelet/x/ansi
-* Version: v0.11.8
-* License: [MIT](https://github.com/charmbracelet/x/blob/ansi/v0.11.8/ansi/LICENSE)
+* Version: v0.11.9
+* License: [MIT](https://github.com/charmbracelet/x/blob/ansi/v0.11.9/ansi/LICENSE)
 
 ```
 MIT License
@@ -8659,8 +8696,8 @@ limitations under the License.
 ## golang.org/x/net
 
 * Name: golang.org/x/net
-* Version: v0.58.0
-* License: [BSD-3-Clause](https://cs.opensource.google/go/x/net/+/v0.58.0:LICENSE)
+* Version: v0.62.0
+* License: [BSD-3-Clause](https://cs.opensource.google/go/x/net/+/v0.62.0:LICENSE)
 
 ```
 Copyright 2009 The Go Authors.
@@ -8733,8 +8770,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## golang.org/x/sys/unix
 
 * Name: golang.org/x/sys/unix
-* Version: v0.47.0
-* License: [BSD-3-Clause](https://cs.opensource.google/go/x/sys/+/v0.47.0:LICENSE)
+* Version: v0.49.0
+* License: [BSD-3-Clause](https://cs.opensource.google/go/x/sys/+/v0.49.0:LICENSE)
 
 ```
 Copyright 2009 The Go Authors.
@@ -8770,8 +8807,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## golang.org/x/term
 
 * Name: golang.org/x/term
-* Version: v0.45.0
-* License: [BSD-3-Clause](https://cs.opensource.google/go/x/term/+/v0.45.0:LICENSE)
+* Version: v0.47.0
+* License: [BSD-3-Clause](https://cs.opensource.google/go/x/term/+/v0.47.0:LICENSE)
 
 ```
 Copyright 2009 The Go Authors.
@@ -8807,8 +8844,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## golang.org/x/text
 
 * Name: golang.org/x/text
-* Version: v0.41.0
-* License: [BSD-3-Clause](https://cs.opensource.google/go/x/text/+/v0.41.0:LICENSE)
+* Version: v0.43.0
+* License: [BSD-3-Clause](https://cs.opensource.google/go/x/text/+/v0.43.0:LICENSE)
 
 ```
 Copyright 2009 The Go Authors.
@@ -8991,8 +9028,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## k8s.io/api
 
 * Name: k8s.io/api
-* Version: v0.37.0
-* License: [Apache-2.0](https://github.com/kubernetes/api/blob/v0.37.0/LICENSE)
+* Version: v0.37.2
+* License: [Apache-2.0](https://github.com/kubernetes/api/blob/v0.37.2/LICENSE)
 
 ```
 
@@ -9203,8 +9240,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## k8s.io/apimachinery/pkg
 
 * Name: k8s.io/apimachinery/pkg
-* Version: v0.37.0
-* License: [Apache-2.0](https://github.com/kubernetes/apimachinery/blob/v0.37.0/LICENSE)
+* Version: v0.37.2
+* License: [Apache-2.0](https://github.com/kubernetes/apimachinery/blob/v0.37.2/LICENSE)
 
 ```
 
@@ -9415,8 +9452,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## k8s.io/apimachinery/third_party/forked/golang
 
 * Name: k8s.io/apimachinery/third_party/forked/golang
-* Version: v0.37.0
-* License: [BSD-3-Clause](https://github.com/kubernetes/apimachinery/blob/v0.37.0/third_party/forked/golang/LICENSE)
+* Version: v0.37.2
+* License: [BSD-3-Clause](https://github.com/kubernetes/apimachinery/blob/v0.37.2/third_party/forked/golang/LICENSE)
 
 ```
 Copyright (c) 2009 The Go Authors. All rights reserved.
@@ -9452,8 +9489,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## k8s.io/client-go
 
 * Name: k8s.io/client-go
-* Version: v0.37.0
-* License: [Apache-2.0](https://github.com/kubernetes/client-go/blob/v0.37.0/LICENSE)
+* Version: v0.37.2
+* License: [Apache-2.0](https://github.com/kubernetes/client-go/blob/v0.37.2/LICENSE)
 
 ```
 
@@ -10326,8 +10363,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## k8s.io/metrics/pkg
 
 * Name: k8s.io/metrics/pkg
-* Version: v0.37.0
-* License: [Apache-2.0](https://github.com/kubernetes/metrics/blob/v0.37.0/LICENSE)
+* Version: v0.37.2
+* License: [Apache-2.0](https://github.com/kubernetes/metrics/blob/v0.37.2/LICENSE)
 
 ```
                                  Apache License
