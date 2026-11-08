@@ -38,23 +38,36 @@ func (c ClusterCost) Known() bool {
 	return c.PricedNodes > 0
 }
 
-// SetPricing wires a price provider into the cost tile. A nil provider hides the
-// tile, which is what `--cost=false` does.
+// SetPricing wires a price provider into the cost tile and shows the tile. Pass
+// nil to clear the provider and hide the tile. Use SetCostEnabled to start with
+// the tile hidden while keeping the provider ready for the `$` shortcut.
 func (u *PodsUIModel) SetPricing(provider pricing.Provider) {
 	u.pricing = provider
+	u.costEnabled = provider != nil
+}
+
+// SetCostEnabled shows or hides the cost tile without discarding the provider.
+// The panel's `$` shortcut flips this at runtime; `--cost` sets its initial value.
+func (u *PodsUIModel) SetCostEnabled(enabled bool) {
+	u.costEnabled = enabled && u.pricing != nil
+}
+
+// CostEnabled reports whether the cost tile is currently shown.
+func (u *PodsUIModel) CostEnabled() bool {
+	return u.costEnabled && u.pricing != nil
 }
 
 // clusterCost sums the hourly price of the nodes currently visible.
 func (u *PodsUIModel) clusterCost(nodes []*Node) ClusterCost {
 	cost := ClusterCost{TotalNodes: len(nodes)}
-	if u.pricing == nil {
+	if u.pricing == nil || !u.costEnabled {
 		return cost
 	}
 
 	supported := 0
 	for _, node := range nodes {
 		details := node.Details()
-		if !platformHasPricing(details.Platform) {
+		if !platformHasPricing(details) {
 			continue
 		}
 		supported++
@@ -75,11 +88,16 @@ func (u *PodsUIModel) clusterCost(nodes []*Node) ClusterCost {
 	return cost
 }
 
-// platformHasPricing reports whether the viewer knows how to price a platform.
-// Only AWS-backed nodes are priced today, so other platforms are skipped instead
-// of being sent to the AWS Pricing API as unknown instance types.
-func platformHasPricing(platform string) bool {
-	switch platform {
+// platformHasPricing reports whether the viewer knows how to price a node. Only
+// AWS-backed nodes are priced today; the AWS flag catches Karpenter nodes that
+// carry AWS EC2 labels without an EKS nodegroup label or provider ID. Other
+// platforms are skipped instead of being sent to the AWS Pricing API as unknown
+// instance types.
+func platformHasPricing(details NodeDetails) bool {
+	if details.AWS {
+		return true
+	}
+	switch details.Platform {
 	case "EKS", "AWS":
 		return true
 	default:

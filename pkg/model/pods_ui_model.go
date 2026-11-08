@@ -136,6 +136,7 @@ type PodsUIModel struct {
 	autoSortPausedUntil time.Time
 	style               *Style
 	pricing             pricing.Provider
+	costEnabled         bool
 	resources           []v1.ResourceName
 	contextName         string
 	namespace           string
@@ -405,9 +406,9 @@ func (u *PodsUIModel) renderKpiStrip(stats Stats, visiblePods []*Pod, filteredPo
 		})
 	}
 
-	// Cost sits beside the cluster resource tiles; it is omitted entirely when no
-	// price provider is configured.
-	if u.pricing != nil {
+	// Cost sits beside the cluster resource tiles; it is omitted while the tile is
+	// disabled, and the `$` shortcut can show it without restarting the app.
+	if u.CostEnabled() {
 		cost := u.clusterCost(stats.Nodes)
 		value := "n/a"
 		fg := podsSurfaceDim
@@ -422,27 +423,66 @@ func (u *PodsUIModel) renderKpiStrip(stats Stats, visiblePods []*Pod, filteredPo
 	if n == 0 {
 		return ""
 	}
-	tileWidth := (width - (n - 1)) / n
-	if tileWidth < 18 {
-		tileWidth = 18
-	}
 
-	tiles := make([]string, n)
-	for i, s := range specs {
-		valueLine := lipgloss.NewStyle().Foreground(s.fg).Bold(true).Render(s.value)
-		subLine := lipgloss.NewStyle().Foreground(podsSurfaceDim).Render(s.sub)
-		tiles[i] = renderPanel(tileWidth, s.label, "", valueLine+"\n"+subLine, podsPanelBorder)
-	}
-
-	// Interleave tiles with 1-space separators so JoinHorizontal lines up rows.
-	args := make([]string, 0, n*2-1)
-	for i, t := range tiles {
-		if i > 0 {
-			args = append(args, " ")
+	// Tiles keep their full labels and values. When the terminal is too narrow for
+	// all of them, wrap the strip onto extra rows instead of letting the renderer
+	// truncate the rightmost tile away (which used to hide CLUSTER COST entirely
+	// on an 80-column terminal).
+	const (
+		kpiTileGap      = 1
+		kpiTileMinWidth = 18
+	)
+	tileWidthFor := func(perRow int) int {
+		if perRow <= 0 {
+			perRow = 1
 		}
-		args = append(args, t)
+		return (width - (perRow-1)*kpiTileGap) / perRow
 	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, args...)
+
+	perRow := n
+	for perRow > 1 && tileWidthFor(perRow) < kpiTileMinWidth {
+		perRow--
+	}
+	if tileWidthFor(perRow) < 12 {
+		perRow = 1
+	}
+	if perRow < n {
+		// Balance the rows: five tiles over two rows read better as 3+2 than 4+1.
+		rows := (n + perRow - 1) / perRow
+		perRow = (n + rows - 1) / rows
+	}
+	tileWidth := tileWidthFor(perRow)
+	if tileWidth < 12 {
+		tileWidth = 12
+	}
+
+	var strip strings.Builder
+	for start := 0; start < n; start += perRow {
+		end := start + perRow
+		if end > n {
+			end = n
+		}
+		tiles := make([]string, 0, end-start)
+		for _, s := range specs[start:end] {
+			valueLine := lipgloss.NewStyle().Foreground(s.fg).Bold(true).Render(s.value)
+			subLine := lipgloss.NewStyle().Foreground(podsSurfaceDim).Render(s.sub)
+			tiles = append(tiles, renderPanel(tileWidth, s.label, "", valueLine+"\n"+subLine, podsPanelBorder))
+		}
+
+		// Interleave tiles with separators so JoinHorizontal lines up rows.
+		args := make([]string, 0, len(tiles)*2-1)
+		for i, t := range tiles {
+			if i > 0 {
+				args = append(args, strings.Repeat(" ", kpiTileGap))
+			}
+			args = append(args, t)
+		}
+		if strip.Len() > 0 {
+			strip.WriteString("\n")
+		}
+		strip.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, args...))
+	}
+	return strip.String()
 }
 
 func splitUnhealthy(pods []*Pod) (warn int, crit int) {
@@ -550,6 +590,64 @@ func (u *PodsUIModel) renderPodBlock(pod *Pod, selected bool, nodeAliases map[st
 	return b.String()
 }
 
+type footerChip struct{ key, label string }
+
+func footerChips(multiColumn bool) []footerChip {
+	chips := []footerChip{{"↑↓", "nav"}}
+	if multiColumn {
+		chips = append(chips,
+			footerChip{"←→", "cols"},
+			// pgup/pgdn and [/] are the same action, so they share one chip
+			// instead of rendering two identically labelled "page" chips.
+			footerChip{"pgup/dn · [/]", "page"},
+		)
+	} else {
+		chips = append(chips, footerChip{"←→", "page"})
+	}
+	return append(chips,
+		footerChip{"enter", "actions"},
+		footerChip{"c/m/s", "sort"},
+		footerChip{"g", "group"},
+		footerChip{"i", "details"},
+		footerChip{"$", "cost"},
+		footerChip{"/", "filter"},
+		footerChip{"q", "quit"},
+	)
+}
+
+// layoutFooterChips wraps the shortcut chips to width so the rightmost chips,
+// such as `$ cost`, stay visible on narrow terminals instead of being truncated.
+func layoutFooterChips(chips []footerChip, width int) []string {
+	if width <= 0 {
+		width = 96
+	}
+	lines := make([]string, 0, 2)
+	current := ""
+	currentWidth := 0
+	for _, c := range chips {
+		chip := renderKbdChip(c.key, c.label)
+		chipWidth := ansi.StringWidth(chip)
+		if current != "" && currentWidth+2+chipWidth > width {
+			lines = append(lines, current)
+			current, currentWidth = chip, chipWidth
+			continue
+		}
+		if current != "" {
+			current += "  "
+			currentWidth += 2
+		}
+		current += chip
+		currentWidth += chipWidth
+	}
+	if current != "" {
+		lines = append(lines, current)
+	}
+	if len(lines) == 0 {
+		return []string{""}
+	}
+	return lines
+}
+
 func (u *PodsUIModel) writeFooter(w io.Writer) {
 	if u.filtering {
 		fmt.Fprintf(w, "%s %s\n", renderBadge("Filter", podsSurfaceText, podsSurfaceBg, true), u.filterInput.View())
@@ -561,30 +659,9 @@ func (u *PodsUIModel) writeFooter(w io.Writer) {
 	}
 	u.writeStatusLine(w)
 
-	chips := []struct{ key, label string }{{"↑↓", "nav"}}
-	if u.isMultiColumnState(u.buildPodListState()) {
-		chips = append(chips,
-			struct{ key, label string }{"←→", "cols"},
-			// pgup/pgdn and [/] are the same action, so they share one chip
-			// instead of rendering two identically labelled "page" chips.
-			struct{ key, label string }{"pgup/dn · [/]", "page"},
-		)
-	} else {
-		chips = append(chips, struct{ key, label string }{"←→", "page"})
+	for _, line := range layoutFooterChips(footerChips(u.isMultiColumnState(u.buildPodListState())), u.headerWidth()) {
+		fmt.Fprintln(w, line)
 	}
-	chips = append(chips,
-		struct{ key, label string }{"enter", "actions"},
-		struct{ key, label string }{"c/m/s", "sort"},
-		struct{ key, label string }{"g", "group"},
-		struct{ key, label string }{"i", "details"},
-		struct{ key, label string }{"/", "filter"},
-		struct{ key, label string }{"q", "quit"},
-	)
-	rendered := make([]string, 0, len(chips))
-	for _, c := range chips {
-		rendered = append(rendered, renderKbdChip(c.key, c.label))
-	}
-	fmt.Fprintln(w, strings.Join(rendered, "  "))
 }
 
 func (u *PodsUIModel) groupPods(pods []*Pod) []podGroup {
@@ -879,6 +956,20 @@ func (u *PodsUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			u.resetSelectionAnchor()
 			u.paginator.Page = 0
 			u.SetTransientStatus(fmt.Sprintf("Grouping by %s.", u.groupModeLabel()), 2*time.Second)
+			return u, nil
+		case "$":
+			if u.pricing == nil {
+				u.SetTransientStatus("Cost pricing is unavailable.", 2*time.Second)
+				return u, nil
+			}
+			u.SetCostEnabled(!u.costEnabled)
+			u.resetSelectionAnchor()
+			u.paginator.Page = 0
+			if u.costEnabled {
+				u.SetTransientStatus("Cost tile enabled.", 2*time.Second)
+			} else {
+				u.SetTransientStatus("Cost tile disabled.", 2*time.Second)
+			}
 			return u, nil
 		case "i":
 			u.showDetails = !u.showDetails
@@ -1564,7 +1655,10 @@ func (u *PodsUIModel) availablePodLines() int {
 		height = 32
 	}
 
-	footerLines := 2 // paginator dots + kbd chips row
+	// Paginator dots plus the wrapped shortcut chips. podColumnCount only depends
+	// on the terminal width, so it picks the chip variant without recursing back
+	// into pagination.
+	footerLines := 1 + len(layoutFooterChips(footerChips(u.podColumnCount() > 1), u.headerWidth()))
 	if strings.TrimSpace(u.filterQuery) != "" || u.filtering {
 		footerLines++
 	}

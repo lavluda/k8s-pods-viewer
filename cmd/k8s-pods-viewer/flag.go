@@ -112,7 +112,7 @@ func ParseFlags() (Flags, error) {
 	flagSet.BoolVar(&flags.AltScreen, "alt-screen", altScreenDefault, "Run in the terminal alternate screen buffer")
 
 	costDefault := cfg.getBool("cost", false)
-	flagSet.BoolVar(&flags.Cost, "cost", costDefault, "Show the cluster running cost tile (off by default). Uses read-only AWS Pricing and EC2 spot price APIs with the local credentials; pass --cost to enable")
+	flagSet.BoolVar(&flags.Cost, "cost", costDefault, "Show the cluster running cost tile at startup (off by default; toggle it in the panel with $). Uses read-only AWS Pricing and EC2 spot price APIs with the local credentials")
 
 	flagSet.BoolVar(&flags.ShowAttribution, "attribution", false, "Show the Open Source Attribution")
 

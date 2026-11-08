@@ -121,8 +121,30 @@ func TestNodeDetailsMissingOptionalMetadata(t *testing.T) {
 	if got.Platform != "Kubernetes" {
 		t.Fatalf("Details().Platform = %q, want Kubernetes", got.Platform)
 	}
+	if got.AWS {
+		t.Fatal("Details().AWS = true without AWS labels or provider ID")
+	}
 	if got.InstanceType != "" || got.Pool != "" || got.CapacityType != "" {
 		t.Fatalf("Details() unexpectedly populated optional metadata: %#v", got)
+	}
+}
+
+func TestNodeDetailsAWSSKarpenterWithoutProviderID(t *testing.T) {
+	n := testNode("node")
+	n.Labels = map[string]string{
+		"karpenter.sh/nodepool":          "general",
+		"karpenter.sh/capacity-type":     "on-demand",
+		"karpenter.k8s.aws/ec2nodeclass": "default",
+		"topology.k8s.aws/zone-id":       "eun1-az1",
+	}
+
+	got := model.NewNode(n).Details()
+	// Karpenter remains the panel's platform; AWS only feeds the cost tile.
+	if got.Platform != "Karpenter" {
+		t.Fatalf("Details().Platform = %q, want Karpenter", got.Platform)
+	}
+	if !got.AWS {
+		t.Fatal("Details().AWS = false for an AWS Karpenter node without a provider ID")
 	}
 }
 

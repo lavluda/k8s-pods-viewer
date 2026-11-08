@@ -108,8 +108,9 @@ nodes cost to keep running:
   reason such as `no AWS credentials` or `pricing access denied`.
 - The tile covers node compute only. Control-plane fees, EBS volumes, load
   balancers, snapshots, and data transfer are not included.
-- Off by default. Pass `--cost` (or set `cost=true` in the config file) to show
-  the tile and fetch AWS prices. Omit the flag / set `cost=false` to keep it off.
+- Off by default. Pass `--cost` (or set `cost=true` in the config file) to start
+  with the tile visible, or press `$` in the panel to toggle it at runtime. The
+  provider makes no AWS calls while the tile is hidden.
 
 ## Health Semantics
 
@@ -282,8 +283,9 @@ CLI flags override config file values.
 -alt-screen
     Run in the terminal alternate screen buffer
 -cost
-    Show the cluster running cost tile (off by default). Uses read-only AWS Pricing
-    and EC2 spot price APIs with the local credentials; pass --cost to enable
+    Show the cluster running cost tile at startup (off by default; toggle it in the
+    panel with $). Uses read-only AWS Pricing and EC2 spot price APIs with the local
+    credentials
 -v, -version
     Display k8s-pods-viewer version
 ```
@@ -298,6 +300,7 @@ CLI flags override config file values.
 - `s`: sort by status
 - `g`: cycle grouping (`namespace`, `workload`, `flat`)
 - `i`: toggle compact vs detailed mode
+- `$`: toggle the cluster cost tile
 - `/`: filter pods
 - `esc`: clear filter, close a popup, or back out of confirmation
 - `q`: quit

@@ -82,9 +82,11 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if flags.Cost {
-		m.SetPricing(awsprice.New(ctx, flags.AWSProfile))
-	}
+	// The provider is always wired so the `$` shortcut can toggle the cost tile at
+	// runtime. It makes no AWS calls until the tile is enabled, and --cost controls
+	// whether the tile starts visible.
+	m.SetPricing(awsprice.New(ctx, flags.AWSProfile))
+	m.SetCostEnabled(flags.Cost)
 
 	controller := client.NewPodsController(cs, metricsClient, m, runtime.nodeSelector, runtime.podSelector, runtime.namespace)
 	controller.Start(ctx)

@@ -20,6 +20,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	v1 "k8s.io/api/core/v1"
 
@@ -108,6 +109,55 @@ func TestClusterCostSkipsUnpricedPlatforms(t *testing.T) {
 	}
 }
 
+func TestClusterCostPricesAWSKarpenterNodes(t *testing.T) {
+	uiModel := costTestModel(t)
+	uiModel.SetPricing(&pricing.Static{OnDemand: map[string]float64{"c5a.large": 0.082}})
+
+	// Karpenter's AWS provider labels the node even when the kubelet has not
+	// published a provider ID, which used to leave it out of the cost tile.
+	node := fleetTestNode("karpenter-node-1", "", map[string]string{
+		"karpenter.sh/nodepool":            "default",
+		"karpenter.sh/capacity-type":       "on-demand",
+		"karpenter.k8s.aws/ec2nodeclass":   "default",
+		"node.kubernetes.io/instance-type": "c5a.large",
+		"topology.kubernetes.io/region":    "eu-north-1",
+		"topology.kubernetes.io/zone":      "eu-north-1a",
+		"kubernetes.io/os":                 "linux",
+	}, v1.NodeSystemInfo{})
+
+	cost := uiModel.clusterCost([]*Node{node})
+	if cost.PricedNodes != 1 || !cost.Known() {
+		t.Fatalf("cost = %#v, want the Karpenter node priced", cost)
+	}
+	if got := cost.costSubLine(); got != "$60/mo · 1/1 nodes priced" {
+		t.Fatalf("costSubLine() = %q", got)
+	}
+}
+
+func TestHeaderWrapsKpiTilesInsteadOfHidingCost(t *testing.T) {
+	uiModel := costTestModel(t)
+	uiModel.width = 80
+	uiModel.height = 44
+	uiModel.SetResources([]string{string(v1.ResourceCPU), string(v1.ResourceMemory)})
+	uiModel.SetPricing(staticPrices())
+	for _, node := range eksFleetNodes() {
+		uiModel.Cluster().AddNode(node)
+	}
+
+	out := ansi.Strip(uiModel.View())
+	for _, want := range []string{"CLUSTER CPU", "CLUSTER MEMORY", "CLUSTER COST", "$0.29/hr"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("View() missing %q at 80 columns\n%s", want, out)
+		}
+	}
+	header := ansi.Strip(uiModel.renderHeader(uiModel.cluster.Stats(), nil, nil))
+	for i, line := range strings.Split(header, "\n") {
+		if w := ansi.StringWidth(line); w > uiModel.width {
+			t.Fatalf("header line %d wider than terminal (%d > %d): %q", i, w, uiModel.width, line)
+		}
+	}
+}
+
 func TestClusterCostWithoutProvider(t *testing.T) {
 	uiModel := costTestModel(t)
 	cost := uiModel.clusterCost(eksFleetNodes())
@@ -156,6 +206,60 @@ func TestHeaderHidesCostTileWithoutProvider(t *testing.T) {
 	}
 	if out := ansi.Strip(uiModel.View()); strings.Contains(out, "CLUSTER COST") {
 		t.Fatalf("View() shows the cost tile with no price provider\n%s", out)
+	}
+}
+
+func TestCostToggleShortcut(t *testing.T) {
+	uiModel := costTestModel(t)
+	uiModel.SetPricing(staticPrices())
+	uiModel.SetCostEnabled(false)
+	for _, node := range eksFleetNodes() {
+		uiModel.Cluster().AddNode(node)
+	}
+
+	if out := ansi.Strip(uiModel.View()); strings.Contains(out, "CLUSTER COST") {
+		t.Fatalf("View() shows the cost tile before pressing $\n%s", out)
+	}
+
+	uiModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'$'}})
+	out := ansi.Strip(uiModel.View())
+	if !strings.Contains(out, "CLUSTER COST") || !strings.Contains(out, "$0.29/hr") {
+		t.Fatalf("View() missing the cost tile after pressing $\n%s", out)
+	}
+	if !strings.Contains(out, "Cost tile enabled.") {
+		t.Fatalf("View() missing the enable status\n%s", out)
+	}
+
+	uiModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'$'}})
+	if out := ansi.Strip(uiModel.View()); strings.Contains(out, "CLUSTER COST") {
+		t.Fatalf("View() still shows the cost tile after toggling it off\n%s", out)
+	}
+}
+
+func TestCostToggleWithoutProviderShowsStatus(t *testing.T) {
+	uiModel := costTestModel(t)
+	uiModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'$'}})
+	if out := ansi.Strip(uiModel.View()); !strings.Contains(out, "Cost pricing is unavailable.") {
+		t.Fatalf("View() missing the unavailable status\n%s", out)
+	}
+}
+
+func TestFooterShowsCostShortcutAndWraps(t *testing.T) {
+	uiModel := costTestModel(t)
+	uiModel.width = 80
+
+	var footer strings.Builder
+	uiModel.writeFooter(&footer)
+	out := ansi.Strip(footer.String())
+	for _, want := range []string{"$", "cost", "quit"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("footer missing %q at 80 columns: %q", want, out)
+		}
+	}
+	for i, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+		if w := ansi.StringWidth(line); w > uiModel.width {
+			t.Fatalf("footer line %d wider than terminal (%d > %d): %q", i, w, uiModel.width, line)
+		}
 	}
 }
 

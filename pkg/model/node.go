@@ -37,7 +37,11 @@ type Node struct {
 // NodeDetails contains optional platform and machine metadata exposed by the
 // Kubernetes Node object. Providers do not consistently populate every field.
 type NodeDetails struct {
-	Platform         string
+	Platform string
+	// AWS reports whether the node is an AWS EC2 machine. It covers nodes whose
+	// provider ID is missing, such as Karpenter nodes that only carry the AWS
+	// provider's EC2 labels.
+	AWS              bool
 	InstanceType     string
 	InstanceID       string
 	ImageID          string
@@ -91,6 +95,7 @@ func (n *Node) Details() NodeDetails {
 	labels := n.node.Labels
 	details := NodeDetails{
 		Platform:         nodePlatform(labels, n.node.Spec.ProviderID),
+		AWS:              nodeIsAWS(labels, n.node.Spec.ProviderID),
 		InstanceType:     firstNonEmpty(labels["node.kubernetes.io/instance-type"], labels["beta.kubernetes.io/instance-type"]),
 		InstanceID:       providerInstanceID(n.node.Spec.ProviderID),
 		ImageID:          firstNonEmpty(labels["eks.amazonaws.com/nodegroup-image"], labels["node.kubernetes.io/image-id"]),
@@ -136,6 +141,38 @@ func nodePlatform(labels map[string]string, providerID string) string {
 	default:
 		return "Kubernetes"
 	}
+}
+
+// nodeIsAWS reports whether the machine is an AWS EC2 instance. The provider ID
+// is the strongest signal, but Karpenter's AWS provider also stamps EC2 metadata
+// labels even before the kubelet publishes a provider ID.
+func nodeIsAWS(labels map[string]string, providerID string) bool {
+	if strings.HasPrefix(providerID, "aws://") {
+		return true
+	}
+	if labels["eks.amazonaws.com/nodegroup"] != "" ||
+		labels["eks.amazonaws.com/nodegroup-image"] != "" ||
+		labels["eks.amazonaws.com/capacityType"] != "" {
+		return true
+	}
+	return isAWSKarpenterNode(labels)
+}
+
+// isAWSKarpenterNode reports whether a Karpenter node was provisioned by the AWS
+// provider. Karpenter stamps provider-specific labels on EC2 nodes; any of these
+// is enough to know the machine is an AWS instance even without a provider ID.
+func isAWSKarpenterNode(labels map[string]string) bool {
+	for _, key := range []string{
+		"karpenter.k8s.aws/ec2nodeclass",
+		"karpenter.k8s.aws/instance-family",
+		"topology.k8s.aws/zone-id",
+		"k8s.io/cloud-provider-aws",
+	} {
+		if labels[key] != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // providerInstanceID extracts the machine identifier from a Kubernetes provider
