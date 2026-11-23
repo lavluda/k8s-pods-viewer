@@ -10,7 +10,7 @@ require (
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/charmbracelet/x/ansi v0.11.9
+	github.com/charmbracelet/x/ansi v0.11.10
 	github.com/facette/natsort v0.0.0-20181210072756-2cd4dd1e2dcb
 	k8s.io/api v0.37.2
 	k8s.io/apimachinery v0.37.2
